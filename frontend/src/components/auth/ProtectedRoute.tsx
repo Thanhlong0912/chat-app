@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useChatStore } from "@/stores/useChatStore";
 import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router";
 
@@ -14,6 +15,13 @@ const ProtectedRoute = () => {
 
     if (accessToken && !user) {
       await fetchMe();
+    }
+
+    // signIn có gọi fetchConversations, còn đường khôi phục phiên này thì
+    // không, nên sau khi F5 sidebar trống cho tới khi đăng nhập lại. Đọc state
+    // mới nhất vì accessToken ở trên là giá trị lúc mount.
+    if (useAuthStore.getState().accessToken) {
+      await useChatStore.getState().fetchConversations();
     }
 
     setStarting(false);
