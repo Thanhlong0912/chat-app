@@ -19,7 +19,12 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
   const [tab, setTab] = useState("received");
   const { getAllFriendRequests } = useFriendStore();
 
+  // Dialog luôn được mount, nên fetch một lần lúc mount sẽ hiện dữ liệu cũ:
+  // lời mời đến sau khi tải trang không xuất hiện cho tới khi F5. Fetch lại
+  // mỗi lần mở.
   useEffect(() => {
+    if (!open) return;
+
     const loadRequest = async () => {
       try {
         await getAllFriendRequests();
@@ -29,7 +34,7 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
     };
 
     loadRequest();
-  }, []);
+  }, [open]);
 
   return (
     <Dialog
