@@ -3,9 +3,6 @@
 A realtime chat app: direct and group conversations, friend requests, presence,
 seen status and avatar uploads.
 
-Ported from the reference implementation at
-[mtikcode/Moji_RealtimeChatApp](https://github.com/mtikcode/Moji_RealtimeChatApp).
-
 ## Stack
 
 - **backend** — Express 5, Mongoose, Socket.IO, JWT access tokens with opaque
