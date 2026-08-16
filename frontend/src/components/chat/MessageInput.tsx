@@ -53,7 +53,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
 
       <div className="flex-1 relative">
         <Input
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyPress}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Soạn tin nhắn..."
