@@ -18,7 +18,11 @@ const friendSchema = new mongoose.Schema(
   }
 );
 
-friendSchema.pre("save", function (next) {
+// Store the pair in a stable order so lookups can match on (userA, userB)
+// without having to try both directions.
+// Mongoose 9 dropped the `next` callback for document middleware: the hook is
+// promise-based now, and calling next() throws.
+friendSchema.pre("save", function () {
   const a = this.userA.toString();
   const b = this.userB.toString();
 
@@ -26,8 +30,6 @@ friendSchema.pre("save", function (next) {
     this.userA = new mongoose.Types.ObjectId(b);
     this.userB = new mongoose.Types.ObjectId(a);
   }
-
-  next();
 });
 
 friendSchema.index({ userA: 1, userB: 1 }, { unique: true });
