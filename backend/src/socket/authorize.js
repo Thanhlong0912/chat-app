@@ -1,4 +1,4 @@
-import { loadMembershipCached } from "../services/membershipService.js";
+import { loadMembership, loadMembershipCached } from "../services/membershipService.js";
 import { isAppError } from "../utils/errors.js";
 import logger from "../utils/logger.js";
 
@@ -19,9 +19,17 @@ export async function assertMembership(socket, conversationId) {
  * callback dạng `{ok: false, code}`. Nếu client không truyền ack thì lỗi chỉ được
  * log — nhưng handler vẫn *không* chạy, nên đây vẫn là một cửa đóng.
  *
- * Handler nhận `(socket, payload, ctx)` với `ctx.role`.
+ * Handler nhận `(socket, payload, ctx)` với `ctx.role`, `ctx.conversationId`,
+ * `ctx.ack`, và `ctx.conversation` khi truyền `{ full: true }`.
+ *
+ * @param {object}  options
+ * @param {boolean} options.full
+ *   `false` (mặc định) chỉ cần biết vai trò, dùng cache 30s — phù hợp với các
+ *   event tần suất cao như typing. `true` load hẳn document, cho những handler
+ *   thực sự cần ghi vào conversation (ví dụ gửi tin nhắn); khi đó không dùng cache
+ *   vì ta cần một document Mongoose còn "sống" để save.
  */
-export function withMembership(handler, { key = "conversationId" } = {}) {
+export function withMembership(handler, { key = "conversationId", full = false } = {}) {
   return async (socket, payload, ack) => {
     // Cho phép client gửi trực tiếp một string id thay vì object, để tương thích
     // với event `join-conversation` cũ.
@@ -32,9 +40,16 @@ export function withMembership(handler, { key = "conversationId" } = {}) {
         return respond(ack, { ok: false, code: "MISSING_CONVERSATION_ID" });
       }
 
-      const { role } = await assertMembership(socket, conversationId);
+      const context = full
+        ? await loadMembership(socket.user._id, conversationId)
+        : await assertMembership(socket, conversationId);
 
-      return await handler(socket, payload, { role, conversationId, ack });
+      return await handler(socket, payload, {
+        role: context.role,
+        conversation: context.conversation,
+        conversationId,
+        ack,
+      });
     } catch (error) {
       const code = isAppError(error) ? error.code : "INTERNAL_ERROR";
 
