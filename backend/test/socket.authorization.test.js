@@ -205,6 +205,89 @@ describe("thứ tự đăng ký listener khi connect", () => {
   });
 });
 
+describe("payload của message:new", () => {
+  it("kèm danh tính người gửi, không phải chỉ id", async () => {
+    const [alice, bob] = await Promise.all([
+      makeUser({ displayName: "Alice" }),
+      makeUser(),
+    ]);
+    const { makeFriendship, makeDirectConversation } = await import("./helpers/factories.js");
+    await makeFriendship(alice, bob);
+    const convo = await makeDirectConversation(alice, bob);
+
+    const socket = await harness.connect(bob);
+    const inbox = collectEvents(socket, "message:new");
+
+    // Gửi qua HTTP để đi đúng đường thật.
+    const { authedAgent } = await import("./helpers/authedAgent.js");
+    await authedAgent(alice)
+      .post("/api/messages/direct")
+      .send({
+        recipientId: String(bob._id),
+        conversationId: String(convo._id),
+        content: "chào bob",
+      })
+      .expect(201);
+
+    const events = await inbox;
+
+    expect(events).toHaveLength(1);
+    // Trước đây client phải tự bịa `displayName: ""` vì payload không có.
+    expect(events[0].message.sender).toMatchObject({
+      _id: String(alice._id),
+      displayName: "Alice",
+    });
+  });
+
+  it("unreadCounts là object thuần, không phải Map bị JSON hoá thành {}", async () => {
+    const [alice, bob] = await Promise.all([makeUser(), makeUser()]);
+    const { makeFriendship, makeDirectConversation } = await import("./helpers/factories.js");
+    await makeFriendship(alice, bob);
+    const convo = await makeDirectConversation(alice, bob);
+
+    const socket = await harness.connect(bob);
+    const inbox = collectEvents(socket, "message:new");
+
+    const { authedAgent } = await import("./helpers/authedAgent.js");
+    await authedAgent(alice)
+      .post("/api/messages/direct")
+      .send({
+        recipientId: String(bob._id),
+        conversationId: String(convo._id),
+        content: "một",
+      })
+      .expect(201);
+
+    const [event] = await inbox;
+
+    // Mongoose Map serialize thành {} — nên badge chưa đọc bị xoá sạch mỗi lần có
+    // tin mới. Bob phải thấy đúng 1 tin chưa đọc.
+    expect(event.unreadCounts[String(bob._id)]).toBe(1);
+  });
+
+  it("vẫn phát tên event cũ new-message cho client chưa cập nhật", async () => {
+    const [alice, bob] = await Promise.all([makeUser(), makeUser()]);
+    const { makeFriendship, makeDirectConversation } = await import("./helpers/factories.js");
+    await makeFriendship(alice, bob);
+    const convo = await makeDirectConversation(alice, bob);
+
+    const socket = await harness.connect(bob);
+    const inbox = collectEvents(socket, "new-message");
+
+    const { authedAgent } = await import("./helpers/authedAgent.js");
+    await authedAgent(alice)
+      .post("/api/messages/direct")
+      .send({
+        recipientId: String(bob._id),
+        conversationId: String(convo._id),
+        content: "tương thích",
+      })
+      .expect(201);
+
+    expect(await inbox).toHaveLength(1);
+  });
+});
+
 describe("room tự động join khi connect", () => {
   it("thành viên nhận tin nhắn mà không cần subscribe thủ công", async () => {
     const [owner, member] = await Promise.all([makeUser(), makeUser()]);

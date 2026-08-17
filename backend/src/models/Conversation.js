@@ -74,7 +74,10 @@ const groupSchema = new mongoose.Schema(
 
 const lastMessageSchema = new mongoose.Schema(
   {
-    _id: { type: String },
+    // Trước đây khai báo là String trong khi code gán ObjectId vào, nên giá trị bị
+    // ép thành chuỗi và không bao giờ dùng được cho populate/$lookup. Dữ liệu cũ
+    // là chuỗi hex nên cast sang ObjectId sạch, không cần migrate.
+    _id: { type: mongoose.Schema.Types.ObjectId },
     content: {
       type: String,
       default: null,
@@ -110,6 +113,13 @@ const conversationSchema = new mongoose.Schema(
     lastMessageAt: {
       type: Date,
     },
+    /**
+     * @deprecated Thay bằng `participants[].lastReadAt`.
+     *
+     * Chỉ mô tả được trạng thái đọc của tin nhắn CUỐI, và bị reset về [] mỗi khi
+     * có tin mới, nên không dựng được read receipt cho từng tin nhắn. Vẫn tiếp tục
+     * ghi thêm một release để client cũ không hỏng; bỏ ở Phase 9.
+     */
     seenBy: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -120,11 +130,19 @@ const conversationSchema = new mongoose.Schema(
       type: lastMessageSchema,
       default: null,
     },
+    /**
+     * Số tin chưa đọc theo từng user, phi chuẩn hoá để render badge không phải
+     * đếm. Được tính LẠI từ `lastReadAt` thay vì $inc/$set độc lập — cách cũ khiến
+     * hai nguồn trôi khỏi nhau.
+     */
     unreadCounts: {
       type: Map,
       of: Number,
       default: {},
     },
+    // Ghim / lưu trữ theo từng người, không phải theo cả conversation.
+    pinnedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    archivedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   {
     timestamps: true,

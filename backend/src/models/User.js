@@ -35,9 +35,17 @@ const userSchema = new mongoose.Schema(
       type: String,
       maxlength: 500, // tuỳ
     },
+    // `sparse` không có tác dụng gì nếu không đi cùng `unique` — comment cũ nói
+    // field này không được trùng, nhưng thực tế chưa bao giờ có ràng buộc đó. Bỏ
+    // `sparse` để mô tả đúng hành vi thật, thay vì thêm `unique` và có nguy cơ
+    // làm hỏng dữ liệu đang có nếu tồn tại số điện thoại trùng.
     phone: {
       type: String,
-      sparse: true, // cho phép null, nhưng không được trùng
+    },
+    /** Lần cuối online, do tầng socket ghi khi socket cuối cùng ngắt kết nối. */
+    lastSeenAt: {
+      type: Date,
+      default: null,
     },
   },
   {

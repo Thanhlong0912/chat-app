@@ -34,6 +34,11 @@ friendSchema.pre("save", function () {
 
 friendSchema.index({ userA: 1, userB: 1 }, { unique: true });
 
+// `getAllFriends` query `$or: [{userA}, {userB}]`. Index kép ở trên phủ nhánh
+// `userA` (vì nó là prefix) nhưng không phủ `userB`, nên một nửa mỗi lượt tra bạn
+// bè đang phải quét cả collection.
+friendSchema.index({ userB: 1 });
+
 const Friend = mongoose.models.Friend || mongoose.model("Friend", friendSchema);
 
 export default Friend;

@@ -32,10 +32,25 @@ export const getMessagesSchema = {
     // Chặn trên: trước đây `?limit=999999` được nhận thẳng, và `Number(rác)` ra
     // NaN khiến `.limit(NaN)` trả về toàn bộ collection.
     limit: z.coerce.number().int().min(1).max(100).default(50),
+    // Cursor là opaque; tính hợp lệ được kiểm tra khi decode để mã lỗi nói rõ
+    // "cursor sai" thay vì một lỗi validate chung.
     cursor: z.string().optional(),
+  }),
+};
+
+export const getMessagesSinceSchema = {
+  params: conversationIdParam,
+  query: z.object({
+    after: z.string().optional(),
   }),
 };
 
 export const conversationIdParamSchema = {
   params: conversationIdParam,
+};
+
+export const markAsSeenSchema = {
+  params: conversationIdParam,
+  // Body là tuỳ chọn: không truyền thì đánh dấu tới tin nhắn cuối.
+  body: z.object({ lastReadMessageId: objectId.optional() }).optional().default({}),
 };

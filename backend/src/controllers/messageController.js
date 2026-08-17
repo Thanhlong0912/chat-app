@@ -5,6 +5,7 @@ import {
   updateConversationAfterCreateMessage,
 } from "../utils/messageHelper.js";
 import { getIo } from "../socket/io.js";
+import { serializeMessage } from "../serializers/message.js";
 import { loadMembership } from "../services/membershipService.js";
 import { isMember } from "../domain/groupPermissions.js";
 import { badRequest } from "../utils/errors.js";
@@ -75,9 +76,14 @@ export const sendDirectMessage = async (req, res) => {
 
   await conversation.save();
 
+  // Người gửi chính là req.user, nên gán trực tiếp thay vì populate thêm một
+  // query. Nhờ vậy payload realtime có sẵn tên và avatar — trước đây client phải
+  // tự bịa `displayName: ""` cho mỗi tin nhắn đến qua socket.
+  message.senderId = req.user;
+
   emitNewMessage(getIo(), conversation, message);
 
-  return res.status(201).json({ message });
+  return res.status(201).json({ message: serializeMessage(message, { viewerId: senderId }) });
 };
 
 export const sendGroupMessage = async (req, res) => {
@@ -100,7 +106,12 @@ export const sendGroupMessage = async (req, res) => {
 
   await conversation.save();
 
+  // Người gửi chính là req.user, nên gán trực tiếp thay vì populate thêm một
+  // query. Nhờ vậy payload realtime có sẵn tên và avatar — trước đây client phải
+  // tự bịa `displayName: ""` cho mỗi tin nhắn đến qua socket.
+  message.senderId = req.user;
+
   emitNewMessage(getIo(), conversation, message);
 
-  return res.status(201).json({ message });
+  return res.status(201).json({ message: serializeMessage(message, { viewerId: senderId }) });
 };
