@@ -1,62 +1,80 @@
-import { useChatStore } from "@/stores/useChatStore";
-import type { Conversation } from "@/types/chat";
 import { SidebarTrigger } from "../ui/sidebar";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useActiveConversation } from "@/stores/useChatStore";
+import { useLastSeen, usePresence, useTypingNames } from "@/stores/useSocketStore";
 import { Separator } from "../ui/separator";
+import { formatOnlineTime } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
-import { useSocketStore } from "@/stores/useSocketStore";
 
-const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
-  const { conversations, activeConversationId } = useChatStore();
-  const { user } = useAuthStore();
-  const { onlineUsers } = useSocketStore();
+const PRESENCE_LABEL = {
+  online: "Đang hoạt động",
+  away: "Vắng mặt",
+  offline: "Không hoạt động",
+} as const;
 
-  let otherUser;
+const ChatWindowHeader = () => {
+  const chat = useActiveConversation();
+  const user = useAuthStore((s) => s.user);
 
-  chat = chat ?? conversations.find((c) => c._id === activeConversationId);
+  const otherUser =
+    chat?.type === "direct" ? chat.participants.find((p) => p._id !== user?._id) : undefined;
 
+  const presence = usePresence(otherUser?._id);
+  const lastSeenAt = useLastSeen(otherUser?._id);
+  const typingNames = useTypingNames(chat?._id);
+
+  // Luôn hiện nút mở sidebar. Trước đây nhánh này chỉ render khi KHÔNG có
+  // conversation nào và còn kèm `md:hidden`, nên trên desktop mở một cuộc trò
+  // chuyện xong là không còn nút nào để thu/mở sidebar.
   if (!chat) {
     return (
-      <header className="md:hidden sticky top-0 z-10 flex items-center gap-2 px-4 py-2 w-full">
+      <header className="sticky top-0 z-10 flex w-full items-center gap-2 px-4 py-2">
         <SidebarTrigger className="-ml-1 text-foreground" />
       </header>
     );
   }
 
-  if (chat.type === "direct") {
-    const otherUsers = chat.participants.filter((p) => p._id !== user?._id);
-    otherUser = otherUsers.length > 0 ? otherUsers[0] : null;
+  const title = chat.type === "direct" ? otherUser?.displayName : chat.group?.name;
 
-    if (!user || !otherUser) return;
-  }
+  const subtitle = () => {
+    if (typingNames.length > 0) {
+      return chat.type === "direct"
+        ? "đang nhập…"
+        : `${typingNames.slice(0, 2).join(", ")} đang nhập…`;
+    }
+
+    if (chat.type === "group") {
+      return `${chat.participants.length} thành viên`;
+    }
+
+    if (presence === "offline" && lastSeenAt) {
+      return `Hoạt động ${formatOnlineTime(new Date(lastSeenAt))}`;
+    }
+
+    return PRESENCE_LABEL[presence];
+  };
 
   return (
-    <header className="sticky top-0 z-10 px-4 py-2 flex items-center bg-background">
-      <div className="flex items-center gap-2 w-full">
+    <header className="sticky top-0 z-10 flex items-center bg-background px-4 py-2">
+      <div className="flex w-full items-center gap-2">
         <SidebarTrigger className="-ml-1 text-foreground" />
         <Separator
           orientation="vertical"
           className="mr-2 data-[orientation=vertical]:h-4"
         />
 
-        <div className="p-2 w-full flex items-center gap-3">
-          {/* avatar */}
+        <div className="flex w-full items-center gap-3 p-2">
           <div className="relative">
             {chat.type === "direct" ? (
               <>
                 <UserAvatar
-                  type={"sidebar"}
+                  type="sidebar"
                   name={otherUser?.displayName || "Moji"}
                   avatarUrl={otherUser?.avatarUrl || undefined}
                 />
-                {/* todo: socket io */}
-                <StatusBadge
-                  status={
-                    onlineUsers.includes(otherUser?._id ?? "") ? "online" : "offline"
-                  }
-                />
+                <StatusBadge status={presence} />
               </>
             ) : (
               <GroupChatAvatar
@@ -66,10 +84,10 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
             )}
           </div>
 
-          {/* name */}
-          <h2 className="font-semibold text-foreground">
-            {chat.type === "direct" ? otherUser?.displayName : chat.group?.name}
-          </h2>
+          <div className="min-w-0">
+            <h2 className="truncate font-semibold text-foreground">{title}</h2>
+            <p className="truncate text-xs text-muted-foreground">{subtitle()}</p>
+          </div>
         </div>
       </div>
     </header>

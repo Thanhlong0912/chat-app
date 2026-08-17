@@ -17,23 +17,15 @@ interface FriendRequestDialogProps {
 
 const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
   const [tab, setTab] = useState("received");
-  const { getAllFriendRequests } = useFriendStore();
-
   // Dialog luôn được mount, nên fetch một lần lúc mount sẽ hiện dữ liệu cũ:
   // lời mời đến sau khi tải trang không xuất hiện cho tới khi F5. Fetch lại
   // mỗi lần mở.
   useEffect(() => {
     if (!open) return;
 
-    const loadRequest = async () => {
-      try {
-        await getAllFriendRequests();
-      } catch (error) {
-        console.error("Lỗi xảy ra khi load requests", error);
-      }
-    };
-
-    loadRequest();
+    // Đọc action qua getState() thay vì qua closure: action của zustand là ổn định,
+    // nên đưa nó vào dependency chỉ làm nhiễu mà không đổi hành vi.
+    void useFriendStore.getState().getAllFriendRequests();
   }, [open]);
 
   return (

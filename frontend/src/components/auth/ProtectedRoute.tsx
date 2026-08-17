@@ -4,36 +4,52 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router";
 
 const ProtectedRoute = () => {
-  const { accessToken, user, loading, refresh, fetchMe } = useAuthStore();
+  // Chọn từng field: destructure cả store khiến gate này render lại theo mọi thay
+  // đổi của auth store.
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const loading = useAuthStore((s) => s.loading);
+
   const [starting, setStarting] = useState(true);
 
-  const init = async () => {
-    // có thể xảy ra khi refresh trang
-    if (!accessToken) {
-      await refresh();
-    }
-
-    if (accessToken && !user) {
-      await fetchMe();
-    }
-
-    // signIn có gọi fetchConversations, còn đường khôi phục phiên này thì
-    // không, nên sau khi F5 sidebar trống cho tới khi đăng nhập lại. Đọc state
-    // mới nhất vì accessToken ở trên là giá trị lúc mount.
-    if (useAuthStore.getState().accessToken) {
-      await useChatStore.getState().fetchConversations();
-    }
-
-    setStarting(false);
-  };
-
   useEffect(() => {
-    init();
+    /*
+     * Khôi phục phiên chỉ chạy đúng một lần khi mount.
+     *
+     * Toàn bộ thao tác đọc state qua `getState()` thay vì qua closure, nên effect
+     * không cần dependency nào — trước đây `init` được khai báo trong thân component
+     * và đọc `accessToken` từ closure, nên nó luôn thấy giá trị lúc mount (đó là
+     * lý do phải có `getState()` ở giữa hàm) và eslint cảnh báo thiếu dependency.
+     */
+    const restore = async () => {
+      const auth = useAuthStore.getState();
+
+      // Xảy ra khi người dùng F5: access token chỉ nằm trong bộ nhớ.
+      if (!auth.accessToken) {
+        await auth.refresh();
+      }
+
+      const afterRefresh = useAuthStore.getState();
+
+      if (afterRefresh.accessToken && !afterRefresh.user) {
+        await afterRefresh.fetchMe();
+      }
+
+      // `signIn` có gọi fetchConversations, còn đường khôi phục phiên thì không,
+      // nên sau khi F5 sidebar trống cho tới khi đăng nhập lại.
+      if (useAuthStore.getState().accessToken) {
+        await useChatStore.getState().fetchConversations();
+      }
+
+      setStarting(false);
+    };
+
+    void restore();
   }, []);
 
   if (starting || loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-dvh items-center justify-center gap-2 text-muted-foreground">
+        <span className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         Đang tải trang...
       </div>
     );
@@ -48,7 +64,7 @@ const ProtectedRoute = () => {
     );
   }
 
-  return <Outlet></Outlet>;
+  return <Outlet />;
 };
 
 export default ProtectedRoute;

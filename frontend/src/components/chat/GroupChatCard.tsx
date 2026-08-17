@@ -1,50 +1,53 @@
-import { useAuthStore } from "@/stores/useAuthStore";
-import { useChatStore } from "@/stores/useChatStore";
-import type { Conversation } from "@/types/chat";
+import { useActiveConversationId, useConversation } from "@/stores/useChatStore";
+import { useSelectConversation } from "@/hooks/useSelectConversation";
+import { cn } from "@/lib/utils";
 import ChatCard from "./ChatCard";
 import UnreadCountBadge from "./UnreadCountBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
 
-const GroupChatCard = ({ convo }: { convo: Conversation }) => {
-  const { user } = useAuthStore();
-  const { activeConversationId, setActiveConversation, messages, fetchMessages } =
-    useChatStore();
+const GroupChatCard = ({ convoId }: { convoId: string }) => {
+  const convo = useConversation(convoId);
+  const activeConversationId = useActiveConversationId();
+  const selectConversation = useSelectConversation();
 
-  if (!user) return null;
+  if (!convo) return null;
 
-  const unreadCount = convo.unreadCounts[user._id];
+  const unreadCount = convo.unreadCount;
   const name = convo.group?.name ?? "";
-  const handleSelectConversation = async (id: string) => {
-    setActiveConversation(id);
-    if (!messages[id]) {
-      await fetchMessages();
-    }
-  };
+  const lastMessage = convo.lastMessage?.content ?? "";
 
   return (
     <ChatCard
       convoId={convo._id}
       name={name}
       timestamp={
-        convo.lastMessage?.createdAt
-          ? new Date(convo.lastMessage.createdAt)
-          : undefined
+        convo.lastMessage?.createdAt ? new Date(convo.lastMessage.createdAt) : undefined
       }
       isActive={activeConversationId === convo._id}
-      onSelect={handleSelectConversation}
+      onSelect={selectConversation}
       unreadCount={unreadCount}
       leftSection={
         <>
-          {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}
+          {/* Cùng preset avatar và cùng thứ tự badge như card 1-1: hai loại card
+              trước đây dùng "chat" (32px) và "sidebar" (48px), nên hai danh sách có
+              chiều cao dòng lệch nhau rõ rệt. */}
           <GroupChatAvatar
             participants={convo.participants}
-            type="chat"
+            type="sidebar"
           />
+          {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}
         </>
       }
       subtitle={
-        <p className="text-sm truncate text-muted-foreground">
-          {convo.participants.length} thành viên
+        <p
+          className={cn(
+            "text-sm truncate",
+            unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground"
+          )}
+        >
+          {/* Hiển thị tin nhắn cuối như card 1-1; số thành viên không phải thứ người
+              ta cần thấy trong danh sách. */}
+          {lastMessage || `${convo.participants.length} thành viên`}
         </p>
       }
     />

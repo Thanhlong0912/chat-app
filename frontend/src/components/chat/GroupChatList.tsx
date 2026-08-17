@@ -1,18 +1,23 @@
-import { useChatStore } from "@/stores/useChatStore";
+import { useConversationIdsByType } from "@/stores/useChatStore";
 import GroupChatCard from "./GroupChatCard";
 
 const GroupChatList = () => {
-  const { conversations } = useChatStore();
+  const ids = useConversationIdsByType("group");
 
-  if (!conversations) return;
+  if (ids.length === 0) {
+    return (
+      <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+        Bạn chưa tham gia nhóm nào.
+      </p>
+    );
+  }
 
-  const groupchats = conversations.filter((convo) => convo.type === "group");
   return (
     <div className="flex-1 overflow-y-auto p-2 space-y-2">
-      {groupchats.map((convo) => (
+      {ids.map((id) => (
         <GroupChatCard
-          convo={convo}
-          key={convo._id}
+          convoId={id}
+          key={id}
         />
       ))}
     </div>

@@ -45,6 +45,9 @@
 
     /* Status colors */
     --online: 140 100% 50%;
+    /* `--away` trước đây chỉ được khai báo trong `.dark`, nên ở chế độ sáng biến
+       này không tồn tại và trạng thái away sẽ không có màu. */
+    --away: 45 100% 55%;
     --offline: 0 0% 70%;
 
     /* Warning */
@@ -248,6 +251,10 @@
   /* Status indicators */
   .status-online {
     @apply bg-[hsl(var(--online))] shadow-[0_0_8px_hsl(var(--online)/0.5)];
+  }
+
+  .status-away {
+    @apply bg-[hsl(var(--away))];
   }
 
   .status-offline {

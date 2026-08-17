@@ -1,58 +1,35 @@
-import { useChatStore } from "@/stores/useChatStore";
-import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import { SidebarInset } from "../ui/sidebar";
+import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
-import { useEffect } from "react";
-import ChatWindowSkeleton from "../skeleton/ChatWindowSkeleton";
+import ConnectionBanner from "./ConnectionBanner";
+import { useActiveConversation } from "@/stores/useChatStore";
 
 const ChatWindowLayout = () => {
-  const {
-    activeConversationId,
-    conversations,
-    messageLoading: loading,
-    markAsSeen,
-  } = useChatStore();
-
-  const selectedConvo =
-    conversations.find((c) => c._id === activeConversationId) ?? null;
-
-  useEffect(() => {
-    if (!selectedConvo) {
-      return;
-    }
-
-    const markSeen = async () => {
-      try {
-        await markAsSeen();
-      } catch (error) {
-        console.error("Lỗi khi markSeen", error);
-      }
-    };
-
-    markSeen();
-  }, [markAsSeen, selectedConvo]);
+  const selectedConvo = useActiveConversation();
 
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;
   }
 
-  if (loading) {
-    return <ChatWindowSkeleton />;
-  }
-
+  /*
+   * `messageLoading` không còn chặn cả cửa sổ.
+   *
+   * Trước đây một cờ loading toàn store làm cả layout bị thay bằng skeleton, tức
+   * MessageInput bị unmount — và text người dùng đang gõ biến mất mỗi lần tải thêm
+   * một trang tin nhắn cũ. Trạng thái tải nay nằm trong danh sách tin nhắn.
+   */
   return (
-    <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden rounded-sm shadow-md">
-      {/* Header */}
-      <ChatWindowHeader chat={selectedConvo} />
+    <SidebarInset className="flex h-full flex-1 flex-col overflow-hidden rounded-sm shadow-md">
+      <ChatWindowHeader />
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto bg-primary-foreground">
+      <ConnectionBanner />
+
+      <div className="flex min-h-0 flex-1 flex-col bg-primary-foreground">
         <ChatWindowBody />
       </div>
 
-      {/* Footer */}
       <MessageInput selectedConvo={selectedConvo} />
     </SidebarInset>
   );

@@ -1,45 +1,40 @@
-import type { Conversation } from "@/types/chat";
 import ChatCard from "./ChatCard";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { useChatStore } from "@/stores/useChatStore";
+import { useActiveConversationId, useConversation } from "@/stores/useChatStore";
+import { usePresence } from "@/stores/useSocketStore";
+import { useSelectConversation } from "@/hooks/useSelectConversation";
 import { cn } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import UnreadCountBadge from "./UnreadCountBadge";
-import { useSocketStore } from "@/stores/useSocketStore";
 
-const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
-  const { user } = useAuthStore();
-  const { activeConversationId, setActiveConversation, messages, fetchMessages } =
-    useChatStore();
-  const { onlineUsers } = useSocketStore();
+const DirectMessageCard = ({ convoId }: { convoId: string }) => {
+  const user = useAuthStore((s) => s.user);
+  // Card tự đăng ký vào đúng conversation của nó, nên một tin nhắn mới ở cuộc trò
+  // chuyện khác không làm nó re-render.
+  const convo = useConversation(convoId);
+  const activeConversationId = useActiveConversationId();
+  const selectConversation = useSelectConversation();
 
-  if (!user) return null;
+  const otherUser = convo?.participants.find((p) => p._id !== user?._id);
+  const presence = usePresence(otherUser?._id);
 
-  const otherUser = convo.participants.find((p) => p._id !== user._id);
-  if (!otherUser) return null;
+  if (!user || !convo || !otherUser) return null;
 
-  const unreadCount = convo.unreadCounts[user._id];
+  // `unreadCount` do server tính cho chính người đang xem, không phải tra Map bằng
+  // id của mình (vốn trả undefined dưới một kiểu khai báo là number).
+  const unreadCount = convo.unreadCount;
   const lastMessage = convo.lastMessage?.content ?? "";
-
-  const handleSelectConversation = async (id: string) => {
-    setActiveConversation(id);
-    if (!messages[id]) {
-      await fetchMessages();
-    }
-  };
 
   return (
     <ChatCard
       convoId={convo._id}
       name={otherUser.displayName ?? ""}
       timestamp={
-        convo.lastMessage?.createdAt
-          ? new Date(convo.lastMessage.createdAt)
-          : undefined
+        convo.lastMessage?.createdAt ? new Date(convo.lastMessage.createdAt) : undefined
       }
       isActive={activeConversationId === convo._id}
-      onSelect={handleSelectConversation}
+      onSelect={selectConversation}
       unreadCount={unreadCount}
       leftSection={
         <>
@@ -48,11 +43,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
             name={otherUser.displayName ?? ""}
             avatarUrl={otherUser.avatarUrl ?? undefined}
           />
-          <StatusBadge
-            status={
-              onlineUsers.includes(otherUser?._id ?? "") ? "online" : "offline"
-            }
-          />
+          <StatusBadge status={presence} />
           {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}
         </>
       }

@@ -23,7 +23,8 @@ const NewGroupChatModal = () => {
   const [search, setSearch] = useState("");
   const { friends, getFriends } = useFriendStore();
   const [invitedUsers, setInvitedUsers] = useState<Friend[]>([]);
-  const { loading, createConversation } = useChatStore();
+  const loading = useChatStore((s) => s.creating);
+  const createConversation = useChatStore((s) => s.createConversation);
 
   const handleGetFriends = async () => {
     await getFriends();

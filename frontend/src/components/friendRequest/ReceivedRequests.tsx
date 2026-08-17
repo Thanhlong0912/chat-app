@@ -2,6 +2,7 @@ import { useFriendStore } from "@/stores/useFriendStore";
 import FriendRequestItem from "./FriendRequestItem";
 import { Button } from "../ui/button";
 import { toast } from "sonner";
+import { describeError } from "@/lib/errors";
 
 const ReceivedRequests = () => {
   const { acceptRequest, declineRequest, loading, receivedList } = useFriendStore();
@@ -14,12 +15,15 @@ const ReceivedRequests = () => {
     );
   }
 
+  // Service nay ném lỗi thật thay vì trả về undefined, nên toast thành công chỉ
+  // hiện khi request thực sự thành công. Trước đây lỗi bị nuốt trong service và
+  // "Đã đồng ý kết bạn thành công" vẫn hiện dù server trả về 500.
   const handleAccept = async (requestId: string) => {
     try {
       await acceptRequest(requestId);
       toast.success("Đã đồng ý kết bạn thành công");
     } catch (error) {
-      console.error(error);
+      toast.error(describeError(error));
     }
   };
 
@@ -28,7 +32,7 @@ const ReceivedRequests = () => {
       await declineRequest(requestId);
       toast.info("Đã từ chối kết bạn");
     } catch (error) {
-      console.error(error);
+      toast.error(describeError(error));
     }
   };
 

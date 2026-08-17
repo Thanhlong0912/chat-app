@@ -1,36 +1,46 @@
 import type { Participant } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
-import { Ellipsis } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface GroupChatAvatarProps {
   participants: Participant[];
   type: "chat" | "sidebar";
 }
 
-const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
-  const avatars = [];
-  const limit = Math.min(participants.length, 4);
+/** Kích thước phải khớp preset của UserAvatar, nếu không viên "+N" sẽ lệch hàng. */
+const PILL_SIZE: Record<GroupChatAvatarProps["type"], string> = {
+  chat: "size-8 text-[10px]",
+  sidebar: "size-12 text-xs",
+};
 
-  for (let i = 0; i < limit; i++) {
-    const member = participants[i];
-    avatars.push(
-      <UserAvatar
-        key={i}
-        type={type}
-        name={member.displayName}
-        avatarUrl={member.avatarUrl ?? undefined}
-      />
-    );
-  }
+const MAX_AVATARS = 3;
+
+const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
+  const shown = participants.slice(0, MAX_AVATARS);
+  const overflow = participants.length - shown.length;
 
   return (
     <div className="relative flex -space-x-2 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-2">
-      {avatars}
+      {shown.map((member) => (
+        <UserAvatar
+          key={member._id}
+          type={type}
+          name={member.displayName ?? ""}
+          avatarUrl={member.avatarUrl ?? undefined}
+        />
+      ))}
 
-      {/* nếu nhiều hơn 4 avatar thì render dấu ... */}
-      {participants.length > limit && (
-        <div className="flex items-center z-10 justify-center size-8 rounded-full bg-muted ring-2 ring-background text-muted-foreground">
-          <Ellipsis className="size-4" />
+      {overflow > 0 && (
+        <div
+          className={cn(
+            "z-10 flex items-center justify-center rounded-full bg-muted font-medium text-muted-foreground ring-2 ring-background",
+            // Trước đây kích thước bị gán cứng `size-8`, nên khi dùng preset
+            // "sidebar" (48px) viên này nhỏ hơn hẳn các avatar bên cạnh.
+            PILL_SIZE[type]
+          )}
+          aria-label={`còn ${overflow} thành viên khác`}
+        >
+          +{overflow}
         </div>
       )}
     </div>

@@ -21,8 +21,16 @@ export const useAuthStore = create<AuthState>()(
       clearState: () => {
         set({ accessToken: null, user: null, loading: false });
         useChatStore.getState().reset();
-        localStorage.clear();
-        sessionStorage.clear();
+
+        /*
+         * Chỉ xoá đúng key của app, KHÔNG dùng localStorage.clear().
+         *
+         * `clear()` xoá cả `theme-storage` và các vị trí scroll đã lưu. Và vì
+         * `signIn` gọi `clearState()` ngay đầu, mỗi lần đăng nhập lại xoá luôn tuỳ
+         * chọn sáng/tối mà người dùng đã chọn.
+         */
+        localStorage.removeItem("auth-storage");
+        useChatStore.persist.clearStorage();
       },
       signUp: async (username, password, email, firstName, lastName) => {
         try {
@@ -43,7 +51,9 @@ export const useAuthStore = create<AuthState>()(
       },
       signIn: async (username, password) => {
         try {
-          get().clearState();
+          // Không gọi clearState() ở đây: nó xoá dữ liệu đã lưu, và đăng nhập không
+          // phải là thời điểm để dọn dẹp. Chỉ reset phần state trong bộ nhớ.
+          useChatStore.getState().reset();
           set({ loading: true });
 
           const { accessToken } = await authService.signIn(username, password);

@@ -1,21 +1,23 @@
-import { useChatStore } from "@/stores/useChatStore";
+import { useConversationIdsByType } from "@/stores/useChatStore";
 import DirectMessageCard from "./DirectMessageCard";
 
 const DirectMessageList = () => {
-  const { conversations } = useChatStore();
+  const ids = useConversationIdsByType("direct");
 
-  if (!conversations) return;
-
-  const directConversations = conversations.filter(
-    (convo) => convo.type === "direct"
-  );
+  if (ids.length === 0) {
+    return (
+      <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+        Chưa có cuộc trò chuyện nào. Hãy bắt đầu một tin nhắn mới.
+      </p>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-2 space-y-2">
-      {directConversations.map((convo) => (
+      {ids.map((id) => (
         <DirectMessageCard
-          convo={convo}
-          key={convo._id}
+          convoId={id}
+          key={id}
         />
       ))}
     </div>

@@ -3,7 +3,7 @@ import { Card, CardContent } from "../ui/card";
 import UserAvatar from "../chat/UserAvatar";
 import { Badge } from "../ui/badge";
 import { cn } from "@/lib/utils";
-import { useSocketStore } from "@/stores/useSocketStore";
+import { usePresence } from "@/stores/useSocketStore";
 import AvatarUploader from "./AvatarUploader";
 
 interface ProfileCardProps {
@@ -13,14 +13,14 @@ interface ProfileCardProps {
 const DEFAULT_BIO = "Will code for food 💻";
 
 const ProfileCard = ({ user }: ProfileCardProps) => {
-  const { onlineUsers } = useSocketStore();
+  const presence = usePresence(user?._id);
   if (!user) return null;
 
   // Giá trị mặc định tính khi render, không gán vào prop: gán trực tiếp là mutate
   // object trong store, nên bio "mặc định" bị ghi thành bio thật của user.
   const bio = user.bio || DEFAULT_BIO;
 
-  const isOnline = onlineUsers.includes(user._id);
+  const isOnline = presence !== "offline";
 
   return (
     <Card className="overflow-hidden p-0 h-52 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
