@@ -1,12 +1,26 @@
 import bcrypt from "bcrypt";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
-import crypto from "crypto";
 import Session from "../models/Session.js";
-import { badRequest, conflict, forbidden, unauthorized } from "../utils/errors.js";
+import { createRefreshToken, createTokenId, hashToken } from "../utils/tokens.js";
+import { invalidateSessionCache } from "../services/sessionService.js";
+import logger from "../utils/logger.js";
+import { conflict, forbidden, unauthorized } from "../utils/errors.js";
 
-const ACCESS_TOKEN_TTL = "30m"; // TODO(Phase 1): giảm còn 15m khi refresh đã có rotation
+const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL = 14 * 24 * 60 * 60 * 1000; // 14 ngày
+
+/**
+ * Khoảng ân hạn cho refresh token vừa bị rotate.
+ *
+ * Nhiều request 401 xảy ra đồng thời có thể kích hoạt nhiều lần refresh song song
+ * với cùng một token. Đó là hành vi lành tính của client, không phải tấn công —
+ * nếu coi nó là dùng lại token thì sẽ thu hồi cả họ session và đăng xuất oan người
+ * dùng. Trong khoảng này ta cấp access token mới nhưng KHÔNG rotate thêm lần nữa,
+ * nên không phát thêm refresh token cho ai.
+ */
+const ROTATION_GRACE_MS = 15_000;
 
 // `secure` + `sameSite: none` không hoạt động trên http://localhost, nên nới ra
 // khi chạy local. Mặc định (NODE_ENV không set hoặc "production") giữ nguyên hành
@@ -28,15 +42,44 @@ const REFRESH_COOKIE_BASE = {
 
 const REFRESH_COOKIE_OPTS = { ...REFRESH_COOKIE_BASE, maxAge: REFRESH_TOKEN_TTL };
 
-export const signUp = async (req, res) => {
-  const { username, password, email, firstName, lastName } = req.body;
+const signAccessToken = ({ userId, sessionId }) =>
+  jwt.sign(
+    { userId, sid: String(sessionId), jti: createTokenId() },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: ACCESS_TOKEN_TTL },
+  );
 
-  if (!username || !password || !email || !firstName || !lastName) {
-    throw badRequest(
-      "MISSING_FIELDS",
-      "Không thể thiếu username, password, email, firstName, và lastName",
-    );
+/** Tra cứu session chấp nhận cả hash mới và token phẳng của bản ghi cũ. */
+const findSessionByToken = (raw) =>
+  Session.findOne({ refreshToken: { $in: [hashToken(raw), raw] } });
+
+const issueSession = async (req, res, { userId, familyId }) => {
+  const raw = createRefreshToken();
+
+  const session = await Session.create({
+    userId,
+    refreshToken: hashToken(raw),
+    familyId,
+    userAgent: req.headers["user-agent"],
+    ip: req.ip,
+    expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL),
+  });
+
+  // Session đầu tiên của một lần đăng nhập tự làm gốc của họ.
+  if (!familyId) {
+    session.familyId = session._id;
+    await session.save();
   }
+
+  res.cookie("refreshToken", raw, REFRESH_COOKIE_OPTS);
+
+  return session;
+};
+
+export const signUp = async (req, res) => {
+  // Đã qua validate(signUpSchema): các field đều có, email đúng định dạng,
+  // password 8..72 byte, username đã lowercase.
+  const { username, password, email, firstName, lastName } = req.body;
 
   // Kiểm tra cả username và email. Trước đây chỉ kiểm tra username, nên email
   // trùng rơi vào unique index và trả về 500 thay vì 409.
@@ -64,10 +107,6 @@ export const signUp = async (req, res) => {
 export const signIn = async (req, res) => {
   const { username, password } = req.body;
 
-  if (!username || !password) {
-    throw badRequest("MISSING_CREDENTIALS", "Thiếu username hoặc password.");
-  }
-
   const user = await User.findOne({ username });
 
   // Cùng một thông báo cho cả hai trường hợp, để không tiết lộ username nào tồn tại.
@@ -79,38 +118,48 @@ export const signIn = async (req, res) => {
 
   if (!passwordCorrect) throw invalid;
 
-  const accessToken = jwt.sign({ userId: user._id }, process.env.ACCESS_TOKEN_SECRET, {
-    expiresIn: ACCESS_TOKEN_TTL,
+  const session = await issueSession(req, res, { userId: user._id });
+
+  return res.status(200).json({
+    message: `User ${user.displayName} đã logged in!`,
+    accessToken: signAccessToken({ userId: user._id, sessionId: session._id }),
   });
-
-  const refreshToken = crypto.randomBytes(64).toString("hex");
-
-  // TODO(Phase 1): lưu sha256 hash thay vì plaintext, và rotate mỗi lần dùng.
-  await Session.create({
-    userId: user._id,
-    refreshToken,
-    expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL),
-  });
-
-  res.cookie("refreshToken", refreshToken, REFRESH_COOKIE_OPTS);
-
-  return res
-    .status(200)
-    .json({ message: `User ${user.displayName} đã logged in!`, accessToken });
 };
 
 export const signOut = async (req, res) => {
   const token = req.cookies?.refreshToken;
 
   if (token) {
-    await Session.deleteOne({ refreshToken: token });
-    res.clearCookie("refreshToken", REFRESH_COOKIE_BASE);
+    const session = await findSessionByToken(token);
+
+    if (session) {
+      // Xoá cả họ: đăng xuất phải vô hiệu hoá mọi token sinh ra từ lần đăng nhập
+      // này, không chỉ token đang giữ.
+      await Session.deleteMany({
+        $or: [{ _id: session._id }, { familyId: session.familyId ?? session._id }],
+      });
+      invalidateSessionCache(String(session._id));
+    }
   }
+
+  res.clearCookie("refreshToken", REFRESH_COOKIE_BASE);
 
   return res.sendStatus(204);
 };
 
-/** Tạo access token mới từ refresh token trong cookie. */
+/** Đăng xuất trên mọi thiết bị. */
+export const signOutEverywhere = async (req, res) => {
+  const sessions = await Session.find({ userId: req.user._id }).select("_id").lean();
+
+  await Session.deleteMany({ userId: req.user._id });
+  sessions.forEach((session) => invalidateSessionCache(String(session._id)));
+
+  res.clearCookie("refreshToken", REFRESH_COOKIE_BASE);
+
+  return res.status(200).json({ revoked: sessions.length });
+};
+
+/** Tạo access token mới từ refresh token trong cookie, và rotate refresh token. */
 export const refreshToken = async (req, res) => {
   const token = req.cookies?.refreshToken;
 
@@ -118,7 +167,7 @@ export const refreshToken = async (req, res) => {
     throw unauthorized("NO_REFRESH_TOKEN", "Token không tồn tại.");
   }
 
-  const session = await Session.findOne({ refreshToken: token });
+  const session = await findSessionByToken(token);
 
   // Giữ 403 (thay vì 401) cho refresh token không hợp lệ: interceptor phía client
   // hiện dựa vào mã này. Sẽ hợp nhất về 401 ở Phase 9 sau khi client đã nhận cả hai.
@@ -131,9 +180,61 @@ export const refreshToken = async (req, res) => {
     throw forbidden("REFRESH_TOKEN_EXPIRED", "Token đã hết hạn.");
   }
 
-  const accessToken = jwt.sign({ userId: session.userId }, process.env.ACCESS_TOKEN_SECRET, {
-    expiresIn: ACCESS_TOKEN_TTL,
-  });
+  if (session.rotatedAt) {
+    const age = Date.now() - session.rotatedAt.getTime();
 
-  return res.status(200).json({ accessToken });
+    if (age > ROTATION_GRACE_MS) {
+      // Một token đã bị thay thế từ lâu mà vẫn được dùng lại: gần như chắc chắn
+      // token đã bị đánh cắp. Thu hồi toàn bộ họ session.
+      const familyId = session.familyId ?? session._id;
+      const family = await Session.find({ familyId }).select("_id").lean();
+
+      await Session.deleteMany({ familyId });
+      family.forEach((s) => invalidateSessionCache(String(s._id)));
+
+      logger.warn(`Phát hiện dùng lại refresh token cho user ${session.userId}`);
+
+      throw forbidden("REFRESH_TOKEN_REUSED", "Phiên đăng nhập đã bị thu hồi, hãy đăng nhập lại");
+    }
+
+    // Trong khoảng ân hạn: đây là race của client, cấp access token mới nhưng
+    // không rotate thêm.
+    return res.status(200).json({
+      accessToken: signAccessToken({ userId: session.userId, sessionId: session._id }),
+    });
+  }
+
+  // Rotate: đánh dấu token hiện tại đã dùng, rồi phát token mới cùng họ.
+  session.rotatedAt = new Date();
+  session.lastUsedAt = new Date();
+  await session.save();
+  invalidateSessionCache(String(session._id));
+
+  const familyId = session.familyId ?? session._id;
+  const nextSession = await issueSession(req, res, { userId: session.userId, familyId });
+
+  return res.status(200).json({
+    accessToken: signAccessToken({ userId: session.userId, sessionId: nextSession._id }),
+  });
+};
+
+/** Danh sách phiên đang hoạt động, cho màn hình bảo mật. */
+export const listSessions = async (req, res) => {
+  const sessions = await Session.find({ userId: req.user._id, rotatedAt: null })
+    .select("userAgent ip lastUsedAt createdAt expiresAt")
+    .sort({ lastUsedAt: -1 })
+    .lean();
+
+  return res.status(200).json({
+    sessions: sessions.map((s) => ({
+      _id: s._id,
+      userAgent: s.userAgent ?? null,
+      ip: s.ip ?? null,
+      lastUsedAt: s.lastUsedAt,
+      createdAt: s.createdAt,
+      current: mongoose.isValidObjectId(req.auth?.sid)
+        ? String(s._id) === String(req.auth.sid)
+        : false,
+    })),
+  });
 };

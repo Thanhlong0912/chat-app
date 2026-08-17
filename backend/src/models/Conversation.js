@@ -1,5 +1,9 @@
 import mongoose from "mongoose";
+import { ROLE_VALUES, ROLES } from "../domain/groupPermissions.js";
 
+// Mọi field thêm mới ở đây đều optional và không có default bắt buộc, để deploy
+// được mà không cần backfill trước: `getRole()` tự suy ra vai trò từ
+// `group.createdBy` cho document cũ.
 const participantSchema = new mongoose.Schema(
   {
     userId: {
@@ -10,6 +14,29 @@ const participantSchema = new mongoose.Schema(
     joinedAt: {
       type: Date,
       default: Date.now,
+    },
+    // Cố tình KHÔNG có default: một default "member" sẽ ghi đè lên fallback theo
+    // `group.createdBy` trong `getRole()`, khiến người tạo nhóm mới bị coi là
+    // member thường. Để trống thì fallback đúng cho cả document cũ và mới.
+    role: {
+      type: String,
+      enum: ROLE_VALUES,
+    },
+    // Con trỏ "đã đọc đến đâu". Là nguồn dữ liệu duy nhất cho read receipt:
+    // rẻ hơn hẳn mảng readBy[] trên từng message, vốn tốn O(message × thành viên)
+    // và phải ghi vào mọi message chưa đọc mỗi lần user đọc.
+    lastReadAt: {
+      type: Date,
+      default: null,
+    },
+    lastReadMessageId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+    },
+    mutedUntil: {
+      type: Date,
+      default: null,
     },
   },
   {
@@ -22,6 +49,18 @@ const groupSchema = new mongoose.Schema(
     name: {
       type: String,
       trim: true,
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+    },
+    avatarUrl: {
+      type: String,
+    },
+    // Cloudinary public_id, cần để xoá được ảnh cũ.
+    avatarId: {
+      type: String,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -92,10 +131,13 @@ const conversationSchema = new mongoose.Schema(
   }
 );
 
+// Trước đây key là "participant.userId" (số ít) — một path không tồn tại, nên
+// index này vô dụng và mọi query nóng đều full scan. Index cũ sẽ được drop trong
+// migration ở Phase 2; ở đây chỉ khai báo đúng để deployment mới tạo ra nó.
 conversationSchema.index({
-  "participant.userId": 1,
+  "participants.userId": 1,
   lastMessageAt: -1,
 });
 
-const Conversation = mongoose.model("Conversation", conversationSchema);
+const Conversation = mongoose.models.Conversation || mongoose.model("Conversation", conversationSchema);
 export default Conversation;

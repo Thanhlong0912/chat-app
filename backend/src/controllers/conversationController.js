@@ -1,7 +1,8 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { getIo } from "../socket/io.js";
-import { badRequest, notFound } from "../utils/errors.js";
+import { ROLES } from "../domain/groupPermissions.js";
+import { badRequest } from "../utils/errors.js";
 
 export const createConversation = async (req, res) => {
   const { type, name, memberIds } = req.body;
@@ -45,7 +46,10 @@ export const createConversation = async (req, res) => {
     // chưa loại chính mình, chưa giới hạn số thành viên.
     conversation = new Conversation({
       type: "group",
-      participants: [{ userId }, ...memberIds.map((id) => ({ userId: id }))],
+      participants: [
+        { userId, role: ROLES.OWNER },
+        ...memberIds.map((id) => ({ userId: id, role: ROLES.MEMBER })),
+      ],
       group: { name, createdBy: userId },
       lastMessageAt: new Date(),
     });
@@ -153,11 +157,8 @@ export const markAsSeen = async (req, res) => {
   const { conversationId } = req.params;
   const userId = req.user._id.toString();
 
-  const conversation = await Conversation.findById(conversationId).lean();
-
-  if (!conversation) {
-    throw notFound("CONVERSATION_NOT_FOUND", "Conversation không tồn tại");
-  }
+  // requireMembership đã load và xác minh quyền, nên không cần query lại.
+  const conversation = req.conversation;
 
   const last = conversation.lastMessage;
 
@@ -175,7 +176,7 @@ export const markAsSeen = async (req, res) => {
       $addToSet: { seenBy: userId },
       $set: { [`unreadCounts.${userId}`]: 0 },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 
   getIo()?.to(conversationId).emit("read-message", {

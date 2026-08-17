@@ -2,14 +2,14 @@ import express from "express";
 import {
   authMe,
   searchUserByUsername,
-  uploadAvatar,
+  uploadAvatar as uploadAvatarHandler,
 } from "../controllers/userController.js";
-import { upload } from "../middlewares/uploadMiddleware.js";
+import { uploadAvatar } from "../middlewares/uploadMiddleware.js";
 
 const router = express.Router();
 
 router.get("/me", authMe);
 router.get("/search", searchUserByUsername);
-router.post("/uploadAvatar", upload.single("file"), uploadAvatar);
+router.post("/uploadAvatar", uploadAvatar.single("file"), uploadAvatarHandler);
 
 export default router;

@@ -101,7 +101,11 @@ describe("errorHandler", () => {
       .get("/api/conversations/khong-phai-objectid/messages")
       .expect(400);
 
-    expect(res.body.code).toBe("INVALID_ID");
+    // Validate ở tầng route chặn trước khi tới service, nên code là
+    // VALIDATION_ERROR kèm tên field — hữu ích hơn cho client so với một mã
+    // chung. Đường socket không đi qua zod và vẫn trả INVALID_ID.
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.details.fields).toHaveProperty("conversationId");
   });
 });
 

@@ -1,6 +1,5 @@
-import Conversation from "../models/Conversation.js";
 import Friend from "../models/Friend.js";
-import { badRequest, forbidden, notFound } from "../utils/errors.js";
+import { badRequest, forbidden } from "../utils/errors.js";
 
 const pair = (a, b) => (a < b ? [a, b] : [b, a]);
 
@@ -41,32 +40,5 @@ export const checkFriendship = async (req, res, next) => {
   next();
 };
 
-/**
- * Xác nhận người gọi là thành viên của conversation trong `req.body.conversationId`.
- *
- * TODO(Phase 1): thay bằng `requireMembership` dùng chung — logic này đúng nhưng
- * đang bị gắn cứng vào `req.body`, nên các route đọc id từ `req.params` không dùng
- * lại được và hiện đang không kiểm tra quyền gì cả.
- */
-export const checkGroupMembership = async (req, res, next) => {
-  const { conversationId } = req.body;
-  const userId = req.user._id;
-
-  const conversation = await Conversation.findById(conversationId);
-
-  if (!conversation) {
-    throw notFound("CONVERSATION_NOT_FOUND", "Không tìm thấy cuộc trò chuyện");
-  }
-
-  const isMember = conversation.participants.some(
-    (p) => p.userId.toString() === userId.toString(),
-  );
-
-  if (!isMember) {
-    throw forbidden("NOT_A_MEMBER", "Bạn không ở trong group này.");
-  }
-
-  req.conversation = conversation;
-
-  next();
-};
+// `checkGroupMembership` đã bị bỏ — thay bằng `requireMembership` trong
+// middlewares/membershipMiddleware.js, dùng chung logic với tầng socket.

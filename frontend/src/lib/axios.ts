@@ -1,10 +1,13 @@
 import { useAuthStore } from "@/stores/useAuthStore";
-import axios from "axios";
+import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
 });
+
+/** Config có thêm cờ nội bộ để không thử lại vô hạn. */
+type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
 // gắn access token vào req header
 api.interceptors.request.use((config) => {
@@ -17,11 +20,38 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/*
+ * Refresh dùng chung một promise duy nhất.
+ *
+ * Nhiều request song song hết hạn cùng lúc sẽ cùng nhận 401. Nếu mỗi request tự
+ * gọi /auth/refresh thì backend nhận N lần refresh với cùng một token — và vì
+ * refresh token nay được rotate, chỉ lần đầu thành công, các lần sau trình ra một
+ * token đã bị thay thế. Server có khoảng ân hạn ngắn cho đúng tình huống này,
+ * nhưng đây mới là cách sửa đúng: gộp tất cả về một lần gọi.
+ */
+let refreshPromise: Promise<string> | null = null;
+
+const refreshAccessToken = (): Promise<string> => {
+  refreshPromise ??= api
+    .post<{ accessToken: string }>("/auth/refresh")
+    .then((res) => {
+      const { accessToken } = res.data;
+      useAuthStore.getState().setAccessToken(accessToken);
+      return accessToken;
+    })
+    .finally(() => {
+      // Xoá để lần hết hạn sau lại refresh được.
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
+};
+
 // tự động gọi refresh api khi access token hết hạn
 api.interceptors.response.use(
   (res) => res,
-  async (error) => {
-    const originalRequest = error.config;
+  async (error: AxiosError) => {
+    const originalRequest = error.config as RetriableConfig | undefined;
 
     // error.config là undefined khi request không bao giờ được gửi (mất mạng, DNS
     // lỗi, request bị cancel). Truy cập .url trực tiếp khi đó sẽ ném TypeError và
@@ -38,32 +68,29 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    originalRequest._retryCount = originalRequest._retryCount || 0;
-
+    const status = error.response?.status;
     // Backend trả 401 cho token hết hạn / không hợp lệ. Vẫn nhận 403 vì
     // `/auth/refresh` chưa đổi mã, và để bundle cũ đang mở tab không mất realtime.
-    const isAuthError =
-      error.response?.status === 401 || error.response?.status === 403;
+    const isAuthError = status === 401 || status === 403;
 
-    if (isAuthError && originalRequest._retryCount < 4) {
-      originalRequest._retryCount += 1;
-
-      try {
-        const res = await api.post("/auth/refresh", { withCredentials: true });
-        const newAccessToken = res.data.accessToken;
-
-        useAuthStore.getState().setAccessToken(newAccessToken);
-
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        useAuthStore.getState().clearState();
-        return Promise.reject(refreshError);
-      }
+    // Chỉ thử lại đúng một lần. Trước đây cho phép 4 lần, nhưng nếu refresh đã
+    // thất bại thì thử thêm chỉ là bốn cách đăng xuất chậm hơn.
+    if (!isAuthError || originalRequest._retried) {
+      return Promise.reject(error);
     }
 
-    return Promise.reject(error);
-  }
+    originalRequest._retried = true;
+
+    try {
+      const accessToken = await refreshAccessToken();
+
+      originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+      return await api(originalRequest);
+    } catch (refreshError) {
+      useAuthStore.getState().clearState();
+      return Promise.reject(refreshError);
+    }
+  },
 );
 
 export default api;

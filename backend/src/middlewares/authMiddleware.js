@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { isSessionActive } from "../services/sessionService.js";
 import { unauthorized } from "../utils/errors.js";
 
 /**
@@ -31,6 +32,12 @@ export const protectedRoute = async (req, res, next) => {
     }
 
     throw unauthorized("TOKEN_INVALID", "Access token không hợp lệ");
+  }
+
+  // Access token mang `sid`, nên đăng xuất thu hồi được nó ngay thay vì phải chờ
+  // hết hạn. Token cũ (chưa có `sid`) vẫn được chấp nhận cho tới khi hết hạn.
+  if (decoded.sid && !(await isSessionActive(decoded.sid))) {
+    throw unauthorized("SESSION_REVOKED", "Phiên đăng nhập đã kết thúc");
   }
 
   const user = await User.findById(decoded.userId).select("-hashedPassword");

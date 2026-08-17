@@ -42,7 +42,7 @@ export const uploadAvatar = async (req, res) => {
       avatarUrl: result.secure_url,
       avatarId: result.public_id,
     },
-    { new: true },
+    { returnDocument: "after" },
   ).select("avatarUrl");
 
   return res.status(200).json({ avatarUrl: updatedUser.avatarUrl });

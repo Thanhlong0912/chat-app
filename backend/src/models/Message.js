@@ -28,6 +28,6 @@ const messageSchema = new mongoose.Schema(
 
 messageSchema.index({ conversationId: 1, createdAt: -1 });
 
-const Message = mongoose.model("Message", messageSchema);
+const Message = mongoose.models.Message || mongoose.model("Message", messageSchema);
 
 export default Message;

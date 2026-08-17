@@ -23,6 +23,16 @@ afterEach(async () => {
   // không phải build lại index cho mỗi test.
   const { collections } = mongoose.connection;
   await Promise.all(Object.values(collections).map((collection) => collection.deleteMany({})));
+
+  // Các cache module-level sống lâu hơn dữ liệu vừa bị xoá, nên phải dọn — nếu
+  // không một session hoặc membership đã biến mất vẫn được coi là hợp lệ.
+  const [{ clearSessionCache }, { clearMembershipCache }] = await Promise.all([
+    import("../src/services/sessionService.js"),
+    import("../src/services/membershipService.js"),
+  ]);
+
+  clearSessionCache();
+  clearMembershipCache();
 });
 
 afterAll(async () => {

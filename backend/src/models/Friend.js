@@ -34,6 +34,6 @@ friendSchema.pre("save", function () {
 
 friendSchema.index({ userA: 1, userB: 1 }, { unique: true });
 
-const Friend = mongoose.model("Friend", friendSchema);
+const Friend = mongoose.models.Friend || mongoose.model("Friend", friendSchema);
 
 export default Friend;

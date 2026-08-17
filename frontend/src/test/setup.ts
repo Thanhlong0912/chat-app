@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { afterEach, beforeAll, vi } from "vitest";
+import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 
 // Vite thay `import.meta.env` lúc build, nhưng test cần giá trị xác định để
@@ -55,49 +55,55 @@ const installStorage = (name: "localStorage" | "sessionStorage") => {
   }
 };
 
-beforeAll(() => {
-  installStorage("localStorage");
-  installStorage("sessionStorage");
+/*
+ * Cài polyfill ở TOP LEVEL, không phải trong `beforeAll`.
+ *
+ * Setup file được chạy trước khi test file được import, nhưng callback của
+ * `beforeAll` chỉ chạy ngay trước test đầu tiên — tức là SAU khi các module đã
+ * được import. `zustand/persist` đọc localStorage lúc khởi tạo store, nên nếu cài
+ * muộn thì store đã nổ trước đó rồi.
+ */
+installStorage("localStorage");
+installStorage("sessionStorage");
 
-  // jsdom chưa có matchMedia — `use-mobile.ts` gọi nó khi mount.
-  if (!window.matchMedia) {
-    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }));
-  }
+// jsdom chưa có matchMedia — `use-mobile.ts` gọi nó khi mount.
+if (!window.matchMedia) {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
 
-  // Radix và scroll logic dùng những API này, jsdom không cài đặt.
-  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+// Radix và scroll logic dùng những API này, jsdom không cài đặt.
+window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-  if (!window.ResizeObserver) {
-    window.ResizeObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    };
-  }
+if (!window.ResizeObserver) {
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
 
-  if (!window.IntersectionObserver) {
-    window.IntersectionObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-      takeRecords() {
-        return [];
-      }
-      root = null;
-      rootMargin = "";
-      thresholds = [];
-    } as unknown as typeof IntersectionObserver;
-  }
-});
+if (!window.IntersectionObserver) {
+  window.IntersectionObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+    root = null;
+    rootMargin = "";
+    thresholds = [];
+  } as unknown as typeof IntersectionObserver;
+}
 
 afterEach(() => {
   cleanup();

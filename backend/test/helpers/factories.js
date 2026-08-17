@@ -4,6 +4,7 @@ import User from "../../src/models/User.js";
 import Friend from "../../src/models/Friend.js";
 import Conversation from "../../src/models/Conversation.js";
 import Message from "../../src/models/Message.js";
+import { ROLES } from "../../src/domain/groupPermissions.js";
 
 let counter = 0;
 const unique = (prefix) => `${prefix}${++counter}-${Date.now().toString(36)}`;
@@ -34,10 +35,21 @@ export const makeDirectConversation = async (a, b, overrides = {}) =>
     ...overrides,
   });
 
+/**
+ * Group conversation. `members` nhận `{user, role}` hoặc thẳng một user
+ * (mặc định vai trò member). Người tạo luôn là owner.
+ */
 export const makeGroupConversation = async (creator, members = [], overrides = {}) =>
   Conversation.create({
     type: "group",
-    participants: [{ userId: creator._id }, ...members.map((m) => ({ userId: m._id }))],
+    participants: [
+      { userId: creator._id, role: ROLES.OWNER },
+      ...members.map((m) =>
+        m?.user
+          ? { userId: m.user._id, role: m.role ?? ROLES.MEMBER }
+          : { userId: m._id, role: ROLES.MEMBER },
+      ),
+    ],
     group: { name: overrides.name ?? unique("Nhóm "), createdBy: creator._id },
     lastMessageAt: new Date(),
     ...overrides,
