@@ -20,4 +20,13 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Các file shadcn/ui được vendor vào đây xuất kèm object variant của cva
+    // cạnh component, nên luôn vi phạm rule này. Đó là hình dạng do generator
+    // sinh ra, không phải lỗi của chúng ta.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

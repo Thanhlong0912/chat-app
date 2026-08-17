@@ -23,18 +23,29 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // error.config là undefined khi request không bao giờ được gửi (mất mạng, DNS
+    // lỗi, request bị cancel). Truy cập .url trực tiếp khi đó sẽ ném TypeError và
+    // che mất lỗi gốc.
+    const url = originalRequest?.url ?? "";
+
     // những api không cần check
     if (
-      originalRequest.url.includes("/auth/signin") ||
-      originalRequest.url.includes("/auth/signup") ||
-      originalRequest.url.includes("/auth/refresh")
+      !originalRequest ||
+      url.includes("/auth/signin") ||
+      url.includes("/auth/signup") ||
+      url.includes("/auth/refresh")
     ) {
       return Promise.reject(error);
     }
 
     originalRequest._retryCount = originalRequest._retryCount || 0;
 
-    if (error.response?.status === 403 && originalRequest._retryCount < 4) {
+    // Backend trả 401 cho token hết hạn / không hợp lệ. Vẫn nhận 403 vì
+    // `/auth/refresh` chưa đổi mã, và để bundle cũ đang mở tab không mất realtime.
+    const isAuthError =
+      error.response?.status === 401 || error.response?.status === 403;
+
+    if (isAuthError && originalRequest._retryCount < 4) {
       originalRequest._retryCount += 1;
 
       try {

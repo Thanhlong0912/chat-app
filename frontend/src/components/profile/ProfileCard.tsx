@@ -10,15 +10,17 @@ interface ProfileCardProps {
   user: User | null;
 }
 
+const DEFAULT_BIO = "Will code for food 💻";
+
 const ProfileCard = ({ user }: ProfileCardProps) => {
   const { onlineUsers } = useSocketStore();
-  if (!user) return;
+  if (!user) return null;
 
-  if (!user.bio) {
-    user.bio = "Will code for food 💻";
-  }
+  // Giá trị mặc định tính khi render, không gán vào prop: gán trực tiếp là mutate
+  // object trong store, nên bio "mặc định" bị ghi thành bio thật của user.
+  const bio = user.bio || DEFAULT_BIO;
 
-  const isOnline = onlineUsers.includes(user._id) ? true : false;
+  const isOnline = onlineUsers.includes(user._id);
 
   return (
     <Card className="overflow-hidden p-0 h-52 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
@@ -40,11 +42,7 @@ const ProfileCard = ({ user }: ProfileCardProps) => {
             {user.displayName}
           </h1>
 
-          {user.bio && (
-            <p className="text-white/70 text-sm mt-2 max-w-lg line-clamp-2">
-              {user.bio}
-            </p>
-          )}
+          <p className="text-white/90 text-sm mt-2 max-w-lg line-clamp-2">{bio}</p>
         </div>
 
         {/* status */}

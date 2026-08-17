@@ -5,7 +5,6 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import PersonalInfoForm from "./PersonalInfoForm";
 import PreferencesForm from "./PreferencesForm";
-import PrivacySettings from "./PrivacySettings";
 
 interface ProfileDialogProps {
   open: boolean;
@@ -35,7 +34,7 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
               defaultValue="personal"
               className="my-4"
             >
-              <TabsList className="grid w-full grid-cols-3 glass-light">
+              <TabsList className="grid w-full grid-cols-2 glass-light">
                 <TabsTrigger
                   value="personal"
                   className="data-[state=active]:glass-strong"
@@ -48,12 +47,6 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
                 >
                   Cấu Hình
                 </TabsTrigger>
-                <TabsTrigger
-                  value="privacy"
-                  className="data-[state=active]:glass-strong"
-                >
-                  Bảo Mật
-                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="personal">
@@ -62,10 +55,6 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
 
               <TabsContent value="preferences">
                 <PreferencesForm />
-              </TabsContent>
-
-              <TabsContent value="privacy">
-                <PrivacySettings />
               </TabsContent>
             </Tabs>
           </div>

@@ -8,6 +8,11 @@ interface EmojiPickerProps {
   onChange: (value: string) => void;
 }
 
+/** Phần payload của emoji-mart mà chúng ta dùng — thư viện không xuất kiểu này. */
+interface EmojiMartEmoji {
+  native: string;
+}
+
 const EmojiPicker = ({ onChange }: EmojiPickerProps) => {
   const { isDark } = useThemeStore();
 
@@ -20,12 +25,12 @@ const EmojiPicker = ({ onChange }: EmojiPickerProps) => {
       <PopoverContent
         side="right"
         sideOffset={40}
-        className="bg-tranparent border-none shadow-none drop-shadow-none mb-12"
+        className="bg-transparent border-none shadow-none drop-shadow-none mb-12"
       >
         <Picker
           theme={isDark ? "dark" : "light"}
           data={data}
-          onEmojiSelect={(emoji: any) => onChange(emoji.native)}
+          onEmojiSelect={(emoji: EmojiMartEmoji) => onChange(emoji.native)}
           emojiSize={24}
         />
       </PopoverContent>

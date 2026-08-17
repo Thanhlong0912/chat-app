@@ -23,6 +23,10 @@ export const updateConversationAfterCreateMessage = (
 };
 
 export const emitNewMessage = (io, conversation, message) => {
+  // Không có io (ví dụ trong unit test) thì bỏ qua — tin nhắn đã được ghi thành
+  // công rồi, không nên vì thế mà fail cả request.
+  if (!io) return;
+
   io.to(conversation._id.toString()).emit("new-message", {
     message,
     conversation: {

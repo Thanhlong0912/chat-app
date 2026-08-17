@@ -5,27 +5,44 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const relativeTime = new Intl.RelativeTimeFormat("vi", { numeric: "auto" });
+
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/**
+ * Khoảng thời gian tương đối, dạng tiếng Việt ("5 phút trước", "3 tháng trước").
+ *
+ * Dùng Intl.RelativeTimeFormat có sẵn trong runtime thay vì tự ghép chuỗi: bản
+ * trước trả về "m" cho cả phút và tháng, nên "5m" (5 phút) không phân biệt được
+ * với "5m" (5 tháng) — và các hậu tố đều là tiếng Anh trong một UI tiếng Việt.
+ */
 export const formatOnlineTime = (date: Date) => {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const diffMs = Date.now() - date.getTime();
 
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const diffMonths = Math.floor(diffDays / 30);
-  const diffYears = Math.floor(diffDays / 365);
+  // Đồng hồ client có thể lệch so với server; đừng hiển thị "trong 3 phút nữa".
+  if (diffMs < MINUTE) return "vừa xong";
 
-  if (diffMins < 60) {
-    return `${diffMins}m`; // 5m, 45m
-  } else if (diffHours < 24) {
-    return `${diffHours}h`; // 3h, 20h
-  } else if (diffDays < 30) {
-    return `${diffDays}d`; // 1d, 12d
-  } else if (diffMonths < 12) {
-    return `${diffMonths}m`; // 1m, 2m, 11m
-  } else {
-    return `${diffYears}y`; // 1y, 2y
+  if (diffMs < HOUR) {
+    return relativeTime.format(-Math.floor(diffMs / MINUTE), "minute");
   }
+
+  if (diffMs < DAY) {
+    return relativeTime.format(-Math.floor(diffMs / HOUR), "hour");
+  }
+
+  const diffDays = Math.floor(diffMs / DAY);
+
+  if (diffDays < 30) {
+    return relativeTime.format(-diffDays, "day");
+  }
+
+  if (diffDays < 365) {
+    return relativeTime.format(-Math.floor(diffDays / 30), "month");
+  }
+
+  return relativeTime.format(-Math.floor(diffDays / 365), "year");
 };
 
 export const formatMessageTime = (date: Date) => {

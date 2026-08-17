@@ -1,55 +1,30 @@
-import dotenv from "dotenv";
-import express from "express";
-import cookieParser from "cookie-parser";
-import cors from "cors";
-import fs from "fs";
-import swaggerUi from "swagger-ui-express";
-import { v2 as cloudinary } from "cloudinary";
+import http from "http";
 
+import { createApp } from "./app.js";
+import { createIo } from "./socket/index.js";
+import { setIo } from "./socket/io.js";
 import { connectDB } from "./libs/db.js";
-import { app, server } from "./socket/index.js";
-import { protectedRoute } from "./middlewares/authMiddleware.js";
-import authRoute from "./routes/authRoute.js";
-import userRoute from "./routes/userRoute.js";
-import friendRoute from "./routes/friendRoute.js";
-import messageRoute from "./routes/messageRoute.js";
-import conversationRoute from "./routes/conversationRoute.js";
-
-dotenv.config();
+import { configureCloudinary } from "./libs/cloudinary.js";
+import logger from "./utils/logger.js";
 
 const port = process.env.PORT || 5001;
 
-// Middleware
-app.use(express.json());
-app.use(cookieParser());
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+configureCloudinary();
 
-// Cloudinary (avatar / attachment uploads)
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+const app = createApp();
+const httpServer = http.createServer(app);
 
-// API docs
-const swaggerDocument = JSON.parse(fs.readFileSync("./src/swagger.json", "utf8"));
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+setIo(createIo(httpServer, { corsOrigin: process.env.CLIENT_URL }));
 
-// Public routes
-app.use("/api/auth", authRoute);
-
-// Private routes
-app.use(protectedRoute);
-app.use("/api/users", userRoute);
-app.use("/api/friends", friendRoute);
-app.use("/api/messages", messageRoute);
-app.use("/api/conversations", conversationRoute);
-
-connectDB().then(() => {
-  // Start the server after successful database connection
-  server.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
+connectDB()
+  .then(() => {
+    httpServer.listen(port, () => {
+      logger.info(`Server đang chạy ở port ${port}`);
+    });
+  })
+  .catch((error) => {
+    logger.error("Không khởi động được server:", error);
+    process.exit(1);
   });
-}).catch((error) => {
-  console.error("Failed to start the server:", error);
-});
+
+export { app, httpServer };
