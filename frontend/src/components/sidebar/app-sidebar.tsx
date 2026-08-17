@@ -4,7 +4,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
@@ -85,13 +84,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
         {/* Dirrect Message */}
         <SidebarGroup>
-          <SidebarGroupLabel className="uppercase">bạn bè</SidebarGroupLabel>
-          <SidebarGroupAction
-            title="Kết Bạn"
-            className="cursor-pointer"
-          >
+          {/*
+            Không bọc trong `SidebarGroupAction`: component đó tự render một
+            <button>, và trigger của Dialog cũng là một <button> — lồng button trong
+            button là HTML không hợp lệ và làm hỏng cả điều hướng bàn phím. Dùng cùng
+            một hàng flex như nhóm chat ở trên, để trigger tự là button duy nhất.
+          */}
+          <div className="flex items-center justify-between">
+            <SidebarGroupLabel className="uppercase">bạn bè</SidebarGroupLabel>
             <AddFriendModal />
-          </SidebarGroupAction>
+          </div>
 
           <SidebarGroupContent>
             {convoLoading ? <ConversationSkeleton /> : <DirectMessageList />}

@@ -79,11 +79,14 @@ const AddFriendModal = () => {
 
   return (
     <Dialog>
-      <DialogTrigger asChild>
-        <div className="flex justify-center items-center size-5 rounded-full hover:bg-sidebar-accent cursor-pointer z-10">
-          <UserPlus className="size-4" />
-          <span className="sr-only">Kết bạn</span>
-        </div>
+      {/* <button> thật, không phải div: div có onClick không nhận focus bàn phím và
+          screen reader không biết đó là thứ bấm được. Vùng chạm cũng nới từ 20px lên
+          36px — 20px thấp hơn nhiều so với mức tối thiểu khuyến nghị cho ngón tay. */}
+      <DialogTrigger
+        className="z-10 flex size-9 items-center justify-center rounded-full transition-smooth hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        aria-label="Kết bạn"
+      >
+        <UserPlus className="size-4" />
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-[425px] border-none">

@@ -25,10 +25,16 @@ const SelectedUsersList = ({ invitedUsers, onRemove }: SelectedUsersListProps) =
           />
           <span>{user.displayName}</span>
 
-          <X
-            className="size-3 cursor-pointer hover:text-destructive"
+          {/* Bọc trong <button>: một <svg> có onClick không focus được và không có
+              tên để screen reader đọc. */}
+          <button
+            type="button"
             onClick={() => onRemove(user)}
-          />
+            aria-label={`Bỏ ${user.displayName} khỏi nhóm`}
+            className="flex size-5 items-center justify-center rounded-full hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <X className="size-3" />
+          </button>
         </div>
       ))}
     </div>

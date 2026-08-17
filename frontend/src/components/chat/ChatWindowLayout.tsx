@@ -1,4 +1,3 @@
-import { SidebarInset } from "../ui/sidebar";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
@@ -14,24 +13,36 @@ const ChatWindowLayout = () => {
   }
 
   /*
-   * `messageLoading` không còn chặn cả cửa sổ.
+   * Grid ba hàng thay vì flex.
    *
-   * Trước đây một cờ loading toàn store làm cả layout bị thay bằng skeleton, tức
-   * MessageInput bị unmount — và text người dùng đang gõ biến mất mỗi lần tải thêm
-   * một trang tin nhắn cũ. Trạng thái tải nay nằm trong danh sách tin nhắn.
+   * `minmax(0, 1fr)` cho hàng giữa là điểm mấu chốt: một grid row mặc định không co
+   * xuống dưới kích thước nội dung của nó, nên nếu để `1fr` thì hàng tin nhắn sẽ
+   * phình ra theo số tin và vùng cuộn lại tràn ra ngoài — đúng thứ đã xảy ra ở bản
+   * cũ. Số 0 ở min mới cho phép hàng co lại và trao việc cuộn cho phần tử bên trong.
+   *
+   * `messageLoading` cũng không còn chặn cả cửa sổ: trước đây một cờ loading toàn
+   * store làm layout bị thay bằng skeleton, tức MessageInput bị unmount và text
+   * đang gõ biến mất mỗi lần tải thêm một trang tin nhắn cũ.
    */
   return (
-    <SidebarInset className="flex h-full flex-1 flex-col overflow-hidden rounded-sm shadow-md">
-      <ChatWindowHeader />
+    <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+      {/*
+        Header và banner phải nằm CHUNG một ô grid.
 
-      <ConnectionBanner />
-
-      <div className="flex min-h-0 flex-1 flex-col bg-primary-foreground">
-        <ChatWindowBody />
+        `ConnectionBanner` trả về `null` khi đang kết nối bình thường, nên nếu để nó
+        là một grid item riêng thì số con thay đổi theo trạng thái: lúc không có
+        banner, mọi thứ dịch lên một hàng — danh sách tin nhắn nhận hàng `auto` (nở
+        theo nội dung) và composer nhận hàng `1fr` (bị bóp còn ~24px rồi tràn ra
+        ngoài). Bọc lại để số grid item luôn là ba.
+      */}
+      <div>
+        <ChatWindowHeader />
+        <ConnectionBanner />
       </div>
 
+      <ChatWindowBody />
       <MessageInput selectedConvo={selectedConvo} />
-    </SidebarInset>
+    </div>
   );
 };
 

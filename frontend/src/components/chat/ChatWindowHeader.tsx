@@ -1,4 +1,6 @@
-import { SidebarTrigger } from "../ui/sidebar";
+import { ArrowLeft } from "lucide-react";
+import { SidebarTrigger, useSidebar } from "../ui/sidebar";
+import { Button } from "../ui/button";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useActiveConversation } from "@/stores/useChatStore";
 import { useLastSeen, usePresence, useTypingNames } from "@/stores/useSocketStore";
@@ -17,6 +19,7 @@ const PRESENCE_LABEL = {
 const ChatWindowHeader = () => {
   const chat = useActiveConversation();
   const user = useAuthStore((s) => s.user);
+  const { setOpenMobile } = useSidebar();
 
   const otherUser =
     chat?.type === "direct" ? chat.participants.find((p) => p._id !== user?._id) : undefined;
@@ -59,10 +62,25 @@ const ChatWindowHeader = () => {
   return (
     <header className="sticky top-0 z-10 flex items-center bg-background px-4 py-2">
       <div className="flex w-full items-center gap-2">
-        <SidebarTrigger className="-ml-1 text-foreground" />
+        {/*
+          Trên mobile, sidebar là một Sheet phủ toàn màn hình — nó chính là "hộp thư".
+          Nút quay lại mở Sheet đó, cho người dùng một đường về danh sách mà không
+          phải đoán rằng phải bấm vào icon hamburger.
+        */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setOpenMobile(true)}
+          className="-ml-1 size-9 md:hidden"
+          aria-label="Quay lại danh sách cuộc trò chuyện"
+        >
+          <ArrowLeft className="size-4" />
+        </Button>
+
+        <SidebarTrigger className="-ml-1 hidden size-9 text-foreground md:flex" />
         <Separator
           orientation="vertical"
-          className="mr-2 data-[orientation=vertical]:h-4"
+          className="mr-2 hidden data-[orientation=vertical]:h-4 md:block"
         />
 
         <div className="flex w-full items-center gap-3 p-2">

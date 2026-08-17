@@ -1,7 +1,6 @@
 import { useFriendStore } from "@/stores/useFriendStore";
 import { DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { MessageCircleMore, Users } from "lucide-react";
-import { Card } from "../ui/card";
 import UserAvatar from "../chat/UserAvatar";
 import { useChatStore } from "@/stores/useChatStore";
 
@@ -30,10 +29,11 @@ const FriendListModal = () => {
 
         <div className="space-y-2 max-h-60 overflow-y-auto">
           {friends.map((friend) => (
-            <Card
+            <button
+              type="button"
               onClick={() => handleAddConversation(friend._id)}
               key={friend._id}
-              className="p-3 cursor-pointer transition-smooth hover:shadow-soft glass hover:bg-muted/30 group/friendCard"
+              className="group/friendCard glass w-full rounded-lg p-3 text-left transition-smooth hover:bg-muted/30 hover:shadow-soft focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               <div className="flex items-center gap-3">
                 {/* avatar */}
@@ -55,7 +55,7 @@ const FriendListModal = () => {
                   </span>
                 </div>
               </div>
-            </Card>
+            </button>
           ))}
 
           {friends.length === 0 && (

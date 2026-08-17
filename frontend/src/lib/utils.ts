@@ -45,6 +45,29 @@ export const formatOnlineTime = (date: Date) => {
   return relativeTime.format(-Math.floor(diffDays / 365), "year");
 };
 
+export const isSameDay = (a: Date, b: Date) =>
+  a.getDate() === b.getDate() &&
+  a.getMonth() === b.getMonth() &&
+  a.getFullYear() === b.getFullYear();
+
+/** Nhãn cho vạch ngăn theo ngày trong luồng tin nhắn. */
+export const formatDaySeparator = (date: Date) => {
+  const now = new Date();
+
+  if (isSameDay(date, now)) return "Hôm nay";
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameDay(date, yesterday)) return "Hôm qua";
+
+  return date.toLocaleDateString("vi-VN", {
+    day: "numeric",
+    month: "long",
+    // Chỉ hiện năm khi khác năm hiện tại, để nhãn không bị dài vô ích.
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+};
+
 export const formatMessageTime = (date: Date) => {
   const now = new Date();
 

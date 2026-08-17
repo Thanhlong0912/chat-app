@@ -71,11 +71,14 @@ const NewGroupChatModal = () => {
       <DialogTrigger asChild>
         <Button
           variant="ghost"
+          size="icon"
           onClick={handleGetFriends}
-          className="flex z-10 justify-center items-center size-5 rounded-full hover:bg-sidebar-accent transition cursor-pointer"
+          // 36px thay vì 20px: vùng chạm cũ nhỏ hơn nhiều so với mức tối thiểu
+          // khuyến nghị cho ngón tay.
+          className="z-10 size-9 rounded-full transition hover:bg-sidebar-accent"
+          aria-label="Tạo nhóm"
         >
           <Users className="size-4" />
-          <span className="sr-only">Tạo nhóm</span>
         </Button>
       </DialogTrigger>
 

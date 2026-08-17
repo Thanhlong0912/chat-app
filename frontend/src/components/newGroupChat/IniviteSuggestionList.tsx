@@ -10,16 +10,15 @@ const IniviteSuggestionList = ({
   filteredFriends,
   onSelect,
 }: InviteSuggestionListProps) => {
-  if (filteredFriends.length === 0) {
-    return;
-  }
+  if (filteredFriends.length === 0) return null;
 
   return (
     <div className="border rounded-lg mt-2 max-h-[180px] overflow-y-auto divide-y">
       {filteredFriends.map((friend) => (
-        <div
+        <button
+          type="button"
           key={friend._id}
-          className="flex items-center gap-3 p-2 cursor-pointer hover:bg-muted transition"
+          className="flex w-full items-center gap-3 p-2 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={() => onSelect(friend)}
         >
           <UserAvatar
@@ -29,7 +28,7 @@ const IniviteSuggestionList = ({
           />
 
           <span className="font-medium">{friend.displayName}</span>
-        </div>
+        </button>
       ))}
     </div>
   );

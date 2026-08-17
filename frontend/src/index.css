@@ -38,7 +38,8 @@
     --accent-foreground: 240 100% 15%;
 
     /* Chat colors */
-    --chat-bubble-sent: 271 79% 47%;
+    /* Đủ tối để chữ trắng 14px đạt AA (>= 4.5:1). */
+    --chat-bubble-sent: 271 79% 42%;
     --chat-bubble-sent-foreground: 0 0% 100%;
     --chat-bubble-received: 0 0% 96%;
     --chat-bubble-received-foreground: 240 15% 15%;
@@ -67,8 +68,10 @@
     --input: 260 30% 92%;
     --ring: 271 79% 47%;
 
-    /* Design system values */
-    --radius: 1rem;
+    /* Thang bo góc.
+       1rem cũ khiến lg/md/sm ra 16/14/12px — gần như không phân biệt được, trong khi
+       `rounded-xl`/`2xl` rơi về mặc định của Tailwind và NHỎ HƠN cả `rounded-lg`. */
+    --radius: 0.75rem;
 
     /* Gradients */
     --gradient-primary: linear-gradient(
@@ -162,6 +165,12 @@
     --away: 45 100% 65%;
     --offline: 0 0% 50%;
 
+    /* Trước đây chỉ có ở light mode, nên ở dark mode hai biến này không tồn tại. */
+    --warning: 37.7 92.1% 55%;
+    --warning-foreground: 240 15% 8%;
+    --info: 198.6 88.7% 55%;
+    --info-foreground: 240 15% 8%;
+
     --destructive: 0 80% 47%;
     --destructive-foreground: 0 0% 100%;
 
@@ -227,13 +236,26 @@
     @apply backdrop-blur-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/20;
   }
 
+  /* Được dùng ở 6 chỗ trong profile/ nhưng trước đây chưa hề được định nghĩa,
+     nên các chỗ đó không có nền gì cả. */
+  .glass-light {
+    @apply bg-card/40 backdrop-blur-sm;
+  }
+
   .glass-strong {
     @apply backdrop-blur-2xl bg-gradient-to-br from-card/90 to-card/60 border border-border/70;
   }
 
   /* Chat bubble variants */
+  /*
+   * Dùng token đầy đủ, KHÔNG phải `bg-primary/80`.
+   *
+   * Ở 80% opacity trên nền gần trắng, tím `271 79% 47%` sáng lên tới khoảng 57% L,
+   * và chữ trắng 14px trên đó chỉ đạt ~3.5:1 — dưới ngưỡng AA 4.5:1. Token
+   * `--chat-bubble-sent` đã được làm tối lại để đạt chuẩn.
+   */
   .chat-bubble-sent {
-    @apply bg-primary/80! text-[hsl(var(--chat-bubble-sent-foreground))]! shadow-[var(--shadow-bubble)];
+    @apply bg-[hsl(var(--chat-bubble-sent))] text-[hsl(var(--chat-bubble-sent-foreground))] shadow-[var(--shadow-bubble)];
   }
 
   .chat-bubble-received {
@@ -334,39 +356,28 @@
       transform: translateY(0) scale(1);
     }
   }
-}
 
-:root {
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-}
+  /*
+   * Tôn trọng prefers-reduced-motion.
+   *
+   * `pulse-ring` chạy `animate-ping` vô hạn và `message-bounce` bật lên ở mỗi tin
+   * nhắn; với người bị say chuyển động (hoặc rối loạn tiền đình) đây là chuyển động
+   * liên tục không thể tắt.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-ring::before {
+      animation: none;
+    }
 
-.dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-}
+    .message-bounce {
+      animation: none;
+    }
 
-@theme inline {
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+    .transition-smooth,
+    .transition-bounce {
+      transition: none;
+    }
+  }
 }
 
 @layer base {
