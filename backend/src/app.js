@@ -51,7 +51,22 @@ export function createApp({ clientUrl = process.env.CLIENT_URL, exposeDocs } = {
   app.use(cookieParser());
   app.use(cors({ origin: clientUrl, credentials: true }));
 
-  app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
+  /*
+    Health check kèm commit đang chạy.
+
+    Không có nó thì "đã deploy chưa?" chỉ trả lời được bằng cách đoán qua hành vi
+    — so từng header, từng hình dạng lỗi — và một deploy hỏng vẫn để instance cũ
+    phục vụ, nên nhìn từ ngoài y hệt như không có gì thay đổi. Render tự đặt sẵn
+    RENDER_GIT_COMMIT; chỗ khác thì đặt tay hoặc để null.
+
+    SHA là public, và repo cũng public, nên không lộ thêm gì.
+  */
+  app.get("/health", (req, res) =>
+    res.status(200).json({
+      status: "ok",
+      commit: process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? null,
+    }),
+  );
 
   // Public
   app.use("/api/auth", authRoute);

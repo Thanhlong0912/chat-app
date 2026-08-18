@@ -98,6 +98,16 @@ and the previous instance keeps serving — so from the outside nothing appears 
 have changed. Check the Render deploy log, not the site, to tell a failed deploy
 from a successful one.
 
+To confirm what is actually running, ask it:
+
+```bash
+curl -s https://chat-app-backend-tgcb.onrender.com/health
+```
+
+`/health` is public and reports the deployed commit — Render sets
+`RENDER_GIT_COMMIT` automatically. A `commit` that does not match `git rev-parse
+HEAD` means the deploy did not land, whatever the dashboard says.
+
 **Run the migrations before the new backend serves traffic.** They are
 deliberately not run on boot — several instances booting at once would run them
 concurrently, and a slow one would block the deploy:

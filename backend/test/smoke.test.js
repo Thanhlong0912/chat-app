@@ -4,7 +4,26 @@ import { makeUser } from "./helpers/factories.js";
 
 describe("hạ tầng test", () => {
   it("dựng được app mà không cần bind port", async () => {
-    await anonAgent().get("/health").expect(200, { status: "ok" });
+    const res = await anonAgent().get("/health").expect(200);
+
+    expect(res.body.status).toBe("ok");
+    // `commit` luôn có mặt, kể cả khi null — client dò deploy đọc thẳng khoá này
+    // và không phải phân biệt "chưa deploy bản mới" với "bản mới không có khoá".
+    expect(res.body).toHaveProperty("commit");
+  });
+
+  it("/health trả về commit khi môi trường có cung cấp", async () => {
+    const previous = process.env.RENDER_GIT_COMMIT;
+    process.env.RENDER_GIT_COMMIT = "abc1234";
+
+    try {
+      const res = await anonAgent().get("/health").expect(200);
+
+      expect(res.body.commit).toBe("abc1234");
+    } finally {
+      if (previous === undefined) delete process.env.RENDER_GIT_COMMIT;
+      else process.env.RENDER_GIT_COMMIT = previous;
+    }
   });
 
   it("factory tạo được user trong mongo in-memory", async () => {
