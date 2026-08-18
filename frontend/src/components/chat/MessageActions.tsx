@@ -68,7 +68,14 @@ const MessageActions = ({
           <Reply className="size-3.5" />
         </Button>
 
-        <DropdownMenu>
+        {/*
+          `modal={false}`: menu này không có lý do gì để khoá cả trang. Ở chế độ
+          modal, nó tham gia vào cùng một sổ sách `pointer-events` của <body> với
+          hộp thoại xác nhận mở ngay sau đó — và hai lớp chồng nhau chính là thứ
+          làm cả trang chết cứng sau khi đóng. Bỏ modal cũng thôi khoá luôn việc
+          cuộn danh sách tin nhắn khi menu đang mở.
+        */}
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"

@@ -19,16 +19,13 @@ import { toast } from "sonner";
 import { useChatStore } from "@/stores/useChatStore";
 
 const NewGroupChatModal = () => {
+  const [open, setOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [search, setSearch] = useState("");
-  const { friends, getFriends } = useFriendStore();
+  const friends = useFriendStore((s) => s.friends);
   const [invitedUsers, setInvitedUsers] = useState<Friend[]>([]);
   const loading = useChatStore((s) => s.creating);
   const createConversation = useChatStore((s) => s.createConversation);
-
-  const handleGetFriends = async () => {
-    await getFriends();
-  };
 
   const handleSelectFriend = (friend: Friend) => {
     setInvitedUsers([...invitedUsers, friend]);
@@ -47,14 +44,19 @@ const NewGroupChatModal = () => {
         return;
       }
 
-      await createConversation(
+      const conversation = await createConversation(
         "group",
         groupName,
         invitedUsers.map((u) => u._id)
       );
 
+      // Thất bại thì giữ nguyên những gì đã nhập để người dùng thử lại, đừng xoá trắng.
+      if (!conversation) return;
+
+      setGroupName("");
       setSearch("");
       setInvitedUsers([]);
+      setOpen(false);
     } catch (error) {
       console.error("Lỗi xảy ra khi handleSubmit trong NewGroupChatModal:", error);
     }
@@ -67,12 +69,17 @@ const NewGroupChatModal = () => {
   );
 
   return (
-    <Dialog>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) void useFriendStore.getState().getFriends();
+      }}
+    >
       <DialogTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
-          onClick={handleGetFriends}
           // 36px thay vì 20px: vùng chạm cũ nhỏ hơn nhiều so với mức tối thiểu
           // khuyến nghị cho ngón tay.
           className="z-10 size-9 rounded-full transition hover:bg-sidebar-accent"

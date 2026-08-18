@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +19,15 @@ interface ConfirmDialogProps {
   description?: string;
   confirmLabel: string;
   onConfirm: () => void;
+  /**
+   * Chạy sau khi hộp thoại đã đóng, và CHỈ khi người dùng đã xác nhận — bấm "Huỷ"
+   * hay Esc thì không gọi.
+   *
+   * Dành cho việc đóng luôn lớp bao ngoài (ví dụ bảng thông tin nhóm). Làm việc đó
+   * ngay trong `onConfirm` nghĩa là hai lớp modal cùng đóng trong một tick, và sổ
+   * sách `pointer-events` của Radix để lại `none` trên <body> — cả trang chết cứng.
+   */
+  onConfirmedClose?: () => void;
   destructive?: boolean;
 }
 
@@ -35,12 +45,27 @@ const ConfirmDialog = ({
   description,
   confirmLabel,
   onConfirm,
+  onConfirmedClose,
   destructive = true,
 }: ConfirmDialogProps) => {
+  const confirmed = useRef(false);
+
   return (
     <AlertDialog
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+
+        if (next) {
+          confirmed.current = false;
+          return;
+        }
+
+        if (confirmed.current) {
+          confirmed.current = false;
+          onConfirmedClose?.();
+        }
+      }}
     >
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -51,7 +76,10 @@ const ConfirmDialog = ({
         <AlertDialogFooter>
           <AlertDialogCancel>Huỷ</AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
+            onClick={() => {
+              confirmed.current = true;
+              onConfirm();
+            }}
             className={cn(destructive && buttonVariants({ variant: "destructive" }))}
           >
             {confirmLabel}
