@@ -21,7 +21,11 @@ import {
 import { checkFriendship } from "../middlewares/friendMiddleware.js";
 import { requireMembership } from "../middlewares/membershipMiddleware.js";
 import { validate } from "../middlewares/validate.js";
-import { uploadAvatar } from "../middlewares/uploadMiddleware.js";
+import {
+  uploadAttachment as uploadAttachmentMulter,
+  uploadAvatar,
+} from "../middlewares/uploadMiddleware.js";
+import { uploadAttachment } from "../controllers/messageController.js";
 import {
   createConversationSchema,
   getMessagesSchema,
@@ -76,6 +80,15 @@ router.patch(
   validate(markAsSeenSchema),
   requireMembership(),
   markAsSeen,
+);
+
+// Tải tệp đính kèm lên, tách riêng khỏi việc gửi tin nhắn (xem controller).
+router.post(
+  "/:conversationId/attachments",
+  validate(conversationIdParamSchema),
+  requireMembership(),
+  uploadAttachmentMulter.single("file"),
+  uploadAttachment,
 );
 
 // --- Quản lý nhóm -----------------------------------------------------------

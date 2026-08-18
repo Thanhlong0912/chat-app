@@ -147,6 +147,124 @@ describe("nút gửi", () => {
   });
 });
 
+describe("trả lời tin nhắn", () => {
+  const parent = {
+    _id: "msg-parent",
+    conversationId: "convo-1",
+    senderId: "user-other",
+    sender: { _id: "user-other", displayName: "Bạn bè" },
+    kind: "text" as const,
+    content: "tin nhắn gốc",
+    attachments: [],
+    replyTo: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    editedAt: null,
+    deleted: false,
+    clientMessageId: null,
+  };
+
+  it("hiện dải bối cảnh khi đang trả lời", () => {
+    useChatStore.setState({ replyingTo: { "convo-1": parent } });
+
+    setup();
+
+    expect(screen.getByText("Đang trả lời")).toBeInTheDocument();
+    expect(screen.getByText("tin nhắn gốc")).toBeInTheDocument();
+  });
+
+  it("gửi kèm replyToMessageId", async () => {
+    useChatStore.setState({ replyingTo: { "convo-1": parent } });
+
+    const { user, textarea } = setup();
+    await user.type(textarea, "câu trả lời");
+    await user.keyboard("{Enter}");
+
+    expect(sendMessage).toHaveBeenCalledWith({
+      conversationId: "convo-1",
+      content: "câu trả lời",
+      replyToMessageId: "msg-parent",
+    });
+  });
+
+  it("Esc huỷ chế độ trả lời", async () => {
+    useChatStore.setState({ replyingTo: { "convo-1": parent } });
+
+    const { user, textarea } = setup();
+    await user.click(textarea);
+    await user.keyboard("{Escape}");
+
+    expect(useChatStore.getState().replyingTo["convo-1"]).toBeUndefined();
+  });
+
+  it("nút huỷ cũng thoát chế độ trả lời", async () => {
+    useChatStore.setState({ replyingTo: { "convo-1": parent } });
+
+    const { user } = setup();
+    await user.click(screen.getByLabelText("Huỷ"));
+
+    expect(useChatStore.getState().replyingTo["convo-1"]).toBeUndefined();
+  });
+});
+
+describe("chỉnh sửa tin nhắn", () => {
+  beforeEach(() => {
+    useChatStore.setState({
+      editingId: { "convo-1": "msg-1" },
+      messages: {
+        "convo-1": {
+          ids: ["msg-1"],
+          byId: {
+            "msg-1": {
+              _id: "msg-1",
+              conversationId: "convo-1",
+              senderId: "me",
+              sender: null,
+              kind: "text",
+              content: "nội dung cũ",
+              attachments: [],
+              replyTo: null,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              editedAt: null,
+              deleted: false,
+              clientMessageId: null,
+            },
+          },
+          hasMore: false,
+          nextCursor: null,
+          status: "loaded",
+          error: null,
+        },
+      },
+    } as never);
+  });
+
+  it("nạp sẵn nội dung hiện tại vào ô soạn", () => {
+    const { textarea } = setup();
+
+    expect((textarea as HTMLTextAreaElement).value).toBe("nội dung cũ");
+    expect(screen.getByText("Đang chỉnh sửa")).toBeInTheDocument();
+  });
+
+  it("gọi editMessage chứ KHÔNG gửi tin nhắn mới", async () => {
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    useChatStore.setState({ editMessage } as never);
+
+    const { user, textarea } = setup();
+    await user.clear(textarea);
+    await user.type(textarea, "nội dung mới");
+    await user.keyboard("{Enter}");
+
+    expect(editMessage).toHaveBeenCalledWith("msg-1", "nội dung mới");
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("không cho gửi ảnh khi đang sửa", () => {
+    setup();
+
+    expect(screen.getByLabelText("Gửi ảnh")).toBeDisabled();
+  });
+});
+
 describe("phát trạng thái đang nhập", () => {
   it("gọi emitTyping khi bắt đầu gõ", async () => {
     const emitTyping = vi.fn();

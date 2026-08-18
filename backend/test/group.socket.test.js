@@ -168,6 +168,33 @@ describe("thay đổi thành viên khi đang mở cuộc trò chuyện", () => {
   });
 });
 
+describe("xoá tin nhắn cuối", () => {
+  it("phát conversation:updated để sidebar không giữ nội dung đã xoá", async () => {
+    const { owner, member, group } = await setup();
+
+    const ownerSocket = await harness.connect(owner);
+    const memberSocket = await harness.connect(member);
+
+    const sent = await emitWithAck(ownerSocket, "message:send", {
+      conversationId: String(group._id),
+      content: "tin nhắn cuối sẽ bị xoá",
+    });
+
+    const inbox = collectEvents(memberSocket, "conversation:updated");
+
+    await authedAgent(owner)
+      .delete(`/api/messages/${sent.message._id}`)
+      .expect(200);
+
+    const events = await inbox;
+
+    // `message:deleted` chỉ nói về một tin nhắn; nếu không phát thêm cái này thì
+    // sidebar vẫn hiển thị nội dung vừa bị xoá.
+    expect(events.length).toBeGreaterThan(0);
+    expect(JSON.stringify(events.at(-1))).not.toContain("tin nhắn cuối sẽ bị xoá");
+  });
+});
+
 describe("tạo conversation", () => {
   it("NGƯỜI TẠO cũng nhận được event, không chỉ người khác", async () => {
     const [alice, bob] = await Promise.all([makeUser(), makeUser()]);

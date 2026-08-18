@@ -1,8 +1,11 @@
 import { loadMembership } from "../services/membershipService.js";
 import {
   createMessage,
+  deleteMessage,
+  editMessage,
   findOrCreateDirectConversation,
 } from "../services/messageService.js";
+import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
 import { isMember } from "../domain/groupPermissions.js";
 import { badRequest } from "../utils/errors.js";
 
@@ -53,6 +56,57 @@ export const sendDirectMessage = async (req, res) => {
   });
 
   return res.status(201).json({ message: serialized });
+};
+
+export const patchMessage = async (req, res) => {
+  const message = await editMessage({
+    messageId: req.params.messageId,
+    actor: req.user,
+    content: req.body.content,
+  });
+
+  return res.status(200).json({ message });
+};
+
+export const removeMessage = async (req, res) => {
+  const message = await deleteMessage({
+    messageId: req.params.messageId,
+    actor: req.user,
+  });
+
+  return res.status(200).json({ message });
+};
+
+/**
+ * Tải tệp đính kèm lên, TÁCH RIÊNG khỏi việc gửi tin nhắn.
+ *
+ * Hai bước thay vì một, để tiến trình tải lên hiển thị được và có thể thử lại độc
+ * lập với việc gửi — gộp làm một thì một lần tải 8MB thất bại sẽ kéo theo mất luôn
+ * nội dung người dùng đã gõ.
+ */
+export const uploadAttachment = async (req, res) => {
+  if (!req.file) {
+    throw badRequest("NO_FILE", "Chưa chọn tệp nào");
+  }
+
+  const result = await uploadImageFromBuffer(req.file.buffer, {
+    folder: "moji_chat/attachments",
+    // Không crop như avatar: ảnh trong tin nhắn phải giữ nguyên khung hình.
+    transformation: undefined,
+  });
+
+  return res.status(201).json({
+    attachment: {
+      url: result.secure_url,
+      publicId: result.public_id,
+      mimeType: req.file.mimetype,
+      bytes: result.bytes,
+      width: result.width,
+      height: result.height,
+      originalName: req.file.originalname,
+      kind: "image",
+    },
+  });
 };
 
 export const sendGroupMessage = async (req, res) => {

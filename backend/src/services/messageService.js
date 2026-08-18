@@ -2,12 +2,17 @@ import mongoose from "mongoose";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { serializeMessage } from "../serializers/message.js";
+import { serializeConversation } from "../serializers/conversation.js";
 import {
   emitNewMessage,
   updateConversationAfterCreateMessage,
 } from "../utils/messageHelper.js";
 import { getIo } from "../socket/io.js";
-import { badRequest } from "../utils/errors.js";
+import { SERVER_EVENTS, conversationRoom } from "../socket/events.js";
+import { loadMembership } from "./membershipService.js";
+import { ACTIONS, can } from "../domain/groupPermissions.js";
+import { destroyImage } from "../middlewares/uploadMiddleware.js";
+import { badRequest, forbidden, notFound } from "../utils/errors.js";
 
 /**
  * Nơi DUY NHẤT một tin nhắn được ghi.
@@ -137,6 +142,171 @@ async function buildReplySnapshot(conversation, replyToMessageId) {
       : (parent.content ?? "").slice(0, REPLY_SNAPSHOT_LENGTH) || null,
     kindSnapshot: parent.kind ?? "text",
   };
+}
+
+/**
+ * Cửa sổ thời gian được phép sửa tin nhắn.
+ *
+ * Có giới hạn là có chủ đích: nếu sửa được vô thời hạn thì một cuộc trò chuyện có
+ * thể bị viết lại nhiều tháng sau, và người đối diện không có cách nào biết nội
+ * dung họ đã đọc từng là gì.
+ */
+const EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+/** Nạp tin nhắn và conversation của nó, có kiểm tra quyền thành viên. */
+const loadMessageForMutation = async (messageId, userId) => {
+  if (!mongoose.isValidObjectId(messageId)) {
+    throw badRequest("INVALID_ID", "messageId không hợp lệ");
+  }
+
+  const message = await Message.findById(messageId);
+
+  if (!message) {
+    throw notFound("MESSAGE_NOT_FOUND", "Không tìm thấy tin nhắn");
+  }
+
+  // Phải là thành viên của conversation chứa tin nhắn đó — nếu không, chỉ cần biết
+  // id tin nhắn là sửa/xoá được tin của người lạ.
+  const { conversation, role } = await loadMembership(userId, message.conversationId);
+
+  return { message, conversation, role };
+};
+
+/**
+ * Sửa nội dung một tin nhắn.
+ *
+ * Chỉ người gửi, chỉ tin nhắn văn bản, và chỉ trong cửa sổ cho phép.
+ */
+export async function editMessage({ messageId, actor, content }) {
+  const { message, conversation } = await loadMessageForMutation(messageId, actor._id);
+
+  if (String(message.senderId) !== String(actor._id)) {
+    throw forbidden("NOT_MESSAGE_SENDER", "Bạn chỉ sửa được tin nhắn của mình");
+  }
+
+  if (message.deletedAt) {
+    throw badRequest("MESSAGE_DELETED", "Tin nhắn đã bị xoá");
+  }
+
+  if (message.kind !== "text") {
+    throw badRequest("NOT_EDITABLE", "Chỉ sửa được tin nhắn văn bản");
+  }
+
+  if (Date.now() - message.createdAt.getTime() > EDIT_WINDOW_MS) {
+    throw badRequest("EDIT_WINDOW_EXPIRED", "Đã quá thời gian cho phép sửa tin nhắn");
+  }
+
+  message.content = content.trim();
+  message.editedAt = new Date();
+  await message.save();
+
+  // Nếu đây là tin nhắn cuối, phần xem trước ở sidebar cũng phải đổi theo.
+  if (String(conversation.lastMessage?._id) === String(message._id)) {
+    conversation.set("lastMessage.content", message.content);
+    await conversation.save();
+  }
+
+  message.senderId = actor;
+  const serialized = serializeMessage(message, { viewerId: actor._id });
+
+  getIo()
+    ?.to(conversationRoom(message.conversationId))
+    .emit(SERVER_EVENTS.MESSAGE_UPDATED, { message: serializeMessage(message) });
+
+  return serialized;
+}
+
+/**
+ * Xoá mềm một tin nhắn.
+ *
+ * Cố tình KHÔNG xoá bản ghi: chuỗi trả lời tham chiếu tới nó, và một khoảng trống
+ * giữa luồng khó hiểu hơn nhiều so với một bia mộ. `serializeMessage` chịu trách
+ * nhiệm không để nội dung đã xoá lọt ra ngoài.
+ */
+export async function deleteMessage({ messageId, actor }) {
+  const { message, conversation, role } = await loadMessageForMutation(messageId, actor._id);
+
+  if (message.deletedAt) {
+    // Xoá lại một tin đã xoá là no-op, không phải lỗi — client có thể retry.
+    return serializeMessage(message, { viewerId: actor._id });
+  }
+
+  const isSender = String(message.senderId) === String(actor._id);
+  // Quản trị nhóm xoá được tin của người khác; trong chat 1-1 thì không có vai trò
+  // nào cao hơn, nên chỉ người gửi mới xoá được.
+  const canModerate =
+    conversation.type === "group" && can(role, ACTIONS.MESSAGE_DELETE_ANY);
+
+  if (!isSender && !canModerate) {
+    throw forbidden("CANNOT_DELETE_MESSAGE", "Bạn không có quyền xoá tin nhắn này");
+  }
+
+  // Dọn tệp trên Cloudinary trước khi mất tham chiếu tới publicId.
+  const publicIds = (message.attachments ?? []).map((a) => a.publicId).filter(Boolean);
+
+  message.deletedAt = new Date();
+  message.deletedBy = actor._id;
+  message.content = null;
+  message.attachments = undefined;
+  await message.save();
+
+  await Promise.all(publicIds.map((id) => destroyImage(id)));
+
+  // Tin nhắn cuối bị xoá thì phải tính lại phần xem trước, nếu không sidebar vẫn
+  // hiển thị nội dung đã bị xoá.
+  const wasLastMessage = String(conversation.lastMessage?._id) === String(message._id);
+
+  if (wasLastMessage) {
+    const previous = await Message.findOne({
+      conversationId: conversation._id,
+      deletedAt: null,
+    })
+      .sort({ createdAt: -1, _id: -1 })
+      .lean();
+
+    conversation.set(
+      "lastMessage",
+      previous
+        ? {
+            _id: previous._id,
+            content: previous.content,
+            senderId: previous.senderId,
+            createdAt: previous.createdAt,
+          }
+        : null,
+    );
+
+    await conversation.save();
+  }
+
+  const io = getIo();
+  const room = conversationRoom(message.conversationId);
+
+  io?.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
+    conversationId: String(message.conversationId),
+    messageId: String(message._id),
+    deletedAt: message.deletedAt,
+  });
+
+  /*
+   * Phát cả conversation:updated khi phần xem trước đổi.
+   *
+   * `message:deleted` chỉ nói cho client biết về một tin nhắn; nó không chạm tới
+   * `lastMessage` của conversation. Thiếu bước này thì sidebar tiếp tục hiển thị
+   * nội dung vừa bị xoá cho tới lần tải lại danh sách tiếp theo.
+   */
+  if (wasLastMessage && io) {
+    await conversation.populate({
+      path: "lastMessage.senderId",
+      select: "displayName avatarUrl",
+    });
+
+    io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+      conversation: serializeConversation(conversation),
+    });
+  }
+
+  return serializeMessage(message, { viewerId: actor._id });
 }
 
 /**

@@ -5,6 +5,8 @@ import type { Conversation, Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import UserAvatar from "./UserAvatar";
+import MessageActions from "./MessageActions";
+import ReplyQuote from "./ReplyQuote";
 
 interface MessageItemProps {
   message: Message;
@@ -98,8 +100,10 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
       )}
 
       <div
+        // `data-message-id` là đích cho việc nhảy tới tin nhắn gốc từ một trích dẫn.
+        data-message-id={message._id}
         className={cn(
-          "flex gap-2",
+          "group/message flex items-center gap-2 rounded-lg transition-smooth",
           // Cụm tin nhắn liền nhau sát hơn, cụm mới thì tách ra — `isGroupBreak`
           // trước đây chỉ dùng để ẩn avatar, không hề ảnh hưởng khoảng cách.
           isGroupBreak ? "mt-3" : "mt-0.5",
@@ -108,7 +112,7 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
         )}
       >
         {!isOwn && (
-          <div className="w-8 shrink-0">
+          <div className="w-8 shrink-0 self-end">
             {isGroupBreak && (
               <UserAvatar
                 type="chat"
@@ -117,6 +121,15 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
               />
             )}
           </div>
+        )}
+
+        {/* Thao tác nằm ở phía đối diện với bong bóng, để không che nội dung.
+            Tin nhắn đang gửi hoặc đã xoá thì không có gì để thao tác. */}
+        {isOwn && !message.status && !message.deleted && (
+          <MessageActions
+            message={message}
+            conversation={selectedConvo}
+          />
         )}
 
         <div
@@ -154,6 +167,14 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
               <p className="text-sm italic opacity-70">Tin nhắn đã bị xoá</p>
             ) : (
               <>
+                {message.replyTo && (
+                  <ReplyQuote
+                    replyTo={message.replyTo}
+                    conversation={selectedConvo}
+                    isOwn={isOwn}
+                  />
+                )}
+
                 {message.attachments.map((attachment) => (
                   <img
                     key={attachment.url}
@@ -214,7 +235,18 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
               {message.editedAt && !message.deleted && <span>· đã chỉnh sửa</span>}
             </span>
           )}
+
+          {!isOwn && message.editedAt && !message.deleted && (
+            <span className="px-1 text-[11px] text-muted-foreground">đã chỉnh sửa</span>
+          )}
         </div>
+
+        {!isOwn && !message.deleted && (
+          <MessageActions
+            message={message}
+            conversation={selectedConvo}
+          />
+        )}
       </div>
     </>
   );

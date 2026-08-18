@@ -70,6 +70,10 @@ export interface ChatState {
   pending: Record<string, PendingMessage>;
   /** Nội dung đang soạn, giữ theo từng conversation. */
   drafts: Record<string, string>;
+  /** Tin nhắn đang được trả lời, theo từng conversation. */
+  replyingTo: Record<string, Message | undefined>;
+  /** Tin nhắn đang được sửa, theo từng conversation. */
+  editingId: Record<string, string | undefined>;
   activeConversationId: string | null;
   convoLoading: boolean;
   creating: boolean;
@@ -89,6 +93,12 @@ export interface ChatState {
   reconcilePending: (clientMessageId: string, saved: Message) => void;
   retryMessage: (clientMessageId: string) => Promise<void>;
   discardFailedMessage: (clientMessageId: string) => void;
+
+  setReplyingTo: (conversationId: string, message: Message | undefined) => void;
+  setEditingId: (conversationId: string, messageId: string | undefined) => void;
+
+  editMessage: (messageId: string, content: string) => Promise<void>;
+  deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
 
   /** Đồng bộ hoá: thêm hoặc thay tin nhắn đến từ socket/HTTP. */
   upsertMessage: (message: Message) => void;

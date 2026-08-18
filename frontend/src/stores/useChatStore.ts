@@ -77,6 +77,8 @@ export const useChatStore = create<ChatState>()(
       messages: {},
       pending: {},
       drafts: {},
+      replyingTo: {},
+      editingId: {},
       activeConversationId: null,
       convoLoading: false,
       creating: false,
@@ -88,6 +90,8 @@ export const useChatStore = create<ChatState>()(
           conversationOrder: [],
           messages: {},
           pending: {},
+          replyingTo: {},
+          editingId: {},
           activeConversationId: null,
           convoLoading: false,
           creating: false,
@@ -100,6 +104,41 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({ drafts: { ...state.drafts, [conversationId]: draft } })),
 
       clearError: () => set({ error: null }),
+
+      setReplyingTo: (conversationId, message) =>
+        set((state) => ({
+          replyingTo: { ...state.replyingTo, [conversationId]: message },
+          // Trả lời và sửa là hai chế độ loại trừ nhau của cùng một ô soạn thảo.
+          editingId: { ...state.editingId, [conversationId]: undefined },
+        })),
+
+      setEditingId: (conversationId, messageId) =>
+        set((state) => ({
+          editingId: { ...state.editingId, [conversationId]: messageId },
+          replyingTo: { ...state.replyingTo, [conversationId]: undefined },
+        })),
+
+      editMessage: async (messageId, content) => {
+        try {
+          const saved = await chatService.editMessage(messageId, content);
+          // Server cũng phát message:updated cho cả room; ghi luôn ở đây để người
+          // sửa thấy kết quả ngay cả khi socket đang gián đoạn.
+          get().upsertMessage(saved);
+        } catch (error) {
+          set({ error: describeError(error) });
+          throw error;
+        }
+      },
+
+      deleteMessage: async (conversationId, messageId) => {
+        try {
+          await chatService.deleteMessage(messageId);
+          get().removeMessage(conversationId, messageId);
+        } catch (error) {
+          set({ error: describeError(error) });
+          throw error;
+        }
+      },
 
       fetchConversations: async () => {
         set({ convoLoading: true, error: null });

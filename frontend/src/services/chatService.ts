@@ -1,5 +1,10 @@
 import api from "@/lib/axios";
-import type { Conversation, ConversationResponse, Message } from "@/types/chat";
+import type {
+  Attachment,
+  Conversation,
+  ConversationResponse,
+  Message,
+} from "@/types/chat";
 import type { SendMessageInput } from "@/types/socket";
 
 interface FetchMessagesResult {
@@ -62,6 +67,34 @@ export const chatService = {
 
     const res = await api.post("/messages/direct", { ...rest, recipientId });
     return res.data.message;
+  },
+
+  async editMessage(messageId: string, content: string): Promise<Message> {
+    const res = await api.patch(`/messages/${messageId}`, { content });
+    return res.data.message;
+  },
+
+  async deleteMessage(messageId: string): Promise<Message> {
+    const res = await api.delete(`/messages/${messageId}`);
+    return res.data.message;
+  },
+
+  /**
+   * Tải tệp lên TRƯỚC, rồi mới gửi tin nhắn tham chiếu tới nó.
+   *
+   * Hai bước để tiến trình tải hiển thị được và thử lại được độc lập — gộp làm một
+   * thì một lần tải 8MB thất bại sẽ kéo theo mất luôn nội dung đã gõ.
+   */
+  async uploadAttachment(conversationId: string, file: File): Promise<Attachment> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await api.post(
+      `/conversations/${conversationId}/attachments`,
+      formData,
+    );
+
+    return res.data.attachment;
   },
 
   async markAsSeen(conversationId: string, lastReadMessageId?: string) {

@@ -26,6 +26,25 @@ export const sendGroupMessageSchema = {
   }),
 };
 
+export const messageIdParamSchema = {
+  params: z.object({ messageId: objectId }),
+};
+
+export const editMessageSchema = {
+  params: z.object({ messageId: objectId }),
+  body: z.object({ content: messageContent }),
+};
+
+/** Payload của socket `message:edit` / `message:delete`. */
+export const socketEditMessageSchema = z.object({
+  messageId: objectId,
+  content: messageContent,
+});
+
+export const socketDeleteMessageSchema = z.object({
+  messageId: objectId,
+});
+
 /** Payload của socket `message:send`. Validate bằng zod như route HTTP. */
 export const socketSendMessageSchema = z.object({
   conversationId: objectId,

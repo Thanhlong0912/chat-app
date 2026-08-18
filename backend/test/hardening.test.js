@@ -296,11 +296,15 @@ describe("rate limiting", () => {
     setRateLimitEnabled(true);
     resetRateLimits();
 
+    // Dừng ngay khi bị chặn: mỗi lần thử là một lượt bcrypt, và chạy thừa chỉ làm
+    // test nhạy cảm hơn với tải của máy mà không kiểm chứng thêm điều gì.
     let res;
     for (let i = 0; i < 12; i += 1) {
       res = await anonAgent()
         .post("/api/auth/signin")
         .send({ username: user.username, password: "matkhausai" });
+
+      if (res.status === 429) break;
     }
 
     expect(res.status).toBe(429);
