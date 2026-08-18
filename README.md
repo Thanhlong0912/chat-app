@@ -63,10 +63,12 @@ Nothing in CI deploys anything. CI only tests.
 
 ### Render service settings
 
-`render.yaml` at the repo root declares these. Render does **not** apply it to a
-service that was created by hand in the dashboard — connect that service to the
-Blueprint, or enter the same values manually. Either way the file is the
-reference.
+These live in the Render dashboard and are **not** in the repo, deliberately.
+A `render.yaml` Blueprint was tried and removed: connecting the repo to a
+Blueprint created a *second* backend service alongside the hand-made one rather
+than adopting it, leaving the original still serving the URL the frontend calls.
+If you reintroduce one, disconnect the Blueprint from any service you intend to
+keep managing by hand.
 
 This is a monorepo and there is **no `package.json` at the repo root** — there
 never has been. So the Root Directory must point at the package being deployed,
