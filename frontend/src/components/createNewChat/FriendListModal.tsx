@@ -4,12 +4,19 @@ import { MessageCircleMore, Users } from "lucide-react";
 import UserAvatar from "../chat/UserAvatar";
 import { useChatStore } from "@/stores/useChatStore";
 
-const FriendListModal = () => {
+interface FriendListModalProps {
+  /** Đóng modal sau khi đã mở được cuộc trò chuyện. */
+  onCreated: () => void;
+}
+
+const FriendListModal = ({ onCreated }: FriendListModalProps) => {
   const { friends } = useFriendStore();
   const { createConversation } = useChatStore();
 
   const handleAddConversation = async (friendId: string) => {
-    await createConversation("direct", "", [friendId]);
+    // Trước đây modal cứ nằm im đè lên chính cuộc trò chuyện nó vừa mở.
+    const conversation = await createConversation("direct", "", [friendId]);
+    if (conversation) onCreated();
   };
 
   return (

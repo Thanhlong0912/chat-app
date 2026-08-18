@@ -113,10 +113,9 @@ const GroupInfoPanel = ({ conversation, open, onOpenChange }: GroupInfoPanelProp
               : "Bạn sẽ không còn nhận được tin nhắn của nhóm này."
         }
         confirmLabel="Rời nhóm"
-        onConfirm={() => {
-          void actions.leave();
-          onOpenChange(false);
-        }}
+        onConfirm={() => void actions.leave()}
+        // Đóng Sheet SAU khi hộp thoại xác nhận đã đóng hẳn, không cùng lúc.
+        onConfirmedClose={() => onOpenChange(false)}
       />
 
       <ConfirmDialog
@@ -125,10 +124,8 @@ const GroupInfoPanel = ({ conversation, open, onOpenChange }: GroupInfoPanelProp
         title="Xoá nhóm này?"
         description="Toàn bộ tin nhắn sẽ bị xoá vĩnh viễn với tất cả thành viên. Không thể hoàn tác."
         confirmLabel="Xoá nhóm"
-        onConfirm={() => {
-          void actions.remove();
-          onOpenChange(false);
-        }}
+        onConfirm={() => void actions.remove()}
+        onConfirmedClose={() => onOpenChange(false)}
       />
     </Sheet>
   );

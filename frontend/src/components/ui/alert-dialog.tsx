@@ -4,6 +4,7 @@ import * as React from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 
 import { cn } from "@/lib/utils";
+import { useOverlayPointerEventsGuard } from "@/lib/overlayPointerEvents";
 import { buttonVariants } from "@/components/ui/button";
 
 /**
@@ -13,8 +14,19 @@ import { buttonVariants } from "@/components/ui/button";
  * bằng Esc hay click ra ngoài, đúng với những thao tác không hoàn tác được.
  * Theo cùng quy ước data-slot/cn với các component shadcn khác trong dự án.
  */
-function AlertDialog({ ...props }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
+function AlertDialog({
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
+  const handleOpenChange = useOverlayPointerEventsGuard(onOpenChange);
+
+  return (
+    <AlertDialogPrimitive.Root
+      data-slot="alert-dialog"
+      onOpenChange={handleOpenChange}
+      {...props}
+    />
+  );
 }
 
 function AlertDialogTrigger({
