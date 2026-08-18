@@ -130,6 +130,22 @@ Vercel's dashboard:
   solution-style root `tsconfig.json`, whose `"files": []` matches no input. The
   script runs `tsc -b`, which does.
 
+It also holds the SPA fallback, without which every route except `/` is a 404:
+
+```json
+"rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+```
+
+Vercel's Vite preset serves `dist` as plain static files and adds no such
+fallback of its own. `/` works because `index.html` is a real file; `/signin`
+and `/signup` are not, so the CDN answers 404 before React Router ever loads.
+That makes it invisible in `npm run dev` — Vite's dev server has the fallback
+built in — and invisible when clicking through the deployed app, because those
+navigations are client-side. It only shows up on a refresh, a shared link, or a
+bookmark, which is to say on the paths a real user takes. Rewrites are only
+consulted after the filesystem check, so this does not shadow the hashed assets
+under `/assets`.
+
 The backend needs **Node 22 or newer** — `npm start` uses
 `--env-file-if-exists`, which arrived in Node 20.12. `backend/package.json`
 declares this in `engines`, which is what Render reads to pick a version. On an
