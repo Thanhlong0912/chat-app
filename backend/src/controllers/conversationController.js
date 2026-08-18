@@ -1,7 +1,14 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { getIo } from "../socket/io.js";
+import {
+  LEGACY_EVENTS,
+  SERVER_EVENTS,
+  conversationRoom,
+  userRoom,
+} from "../socket/events.js";
 import { ROLES } from "../domain/groupPermissions.js";
+import { MAX_GROUP_MEMBERS } from "../services/groupService.js";
 import { decodeCursor, encodeCursor, newerThan, olderThan } from "../utils/cursor.js";
 import { advanceRead } from "../services/readReceiptService.js";
 import { serializeMessages } from "../serializers/message.js";
@@ -12,17 +19,20 @@ import {
 import { badRequest } from "../utils/errors.js";
 
 export const createConversation = async (req, res) => {
-  const { type, name, memberIds } = req.body;
+  const { type, name } = req.body;
   const userId = req.user._id;
 
-  if (
-    !type ||
-    (type === "group" && !name) ||
-    !memberIds ||
-    !Array.isArray(memberIds) ||
-    memberIds.length === 0
-  ) {
-    throw badRequest("INVALID_CONVERSATION", "Tên nhóm và danh sách thành viên là bắt buộc");
+  // Đã qua validate(createConversationSchema): type hợp lệ, memberIds là mảng
+  // ObjectId đã dedupe, nhóm có tên, direct có đúng một người nhận.
+  // Loại chính mình ra: có mình trong memberIds sẽ tạo participant trùng.
+  const memberIds = req.body.memberIds.filter((id) => String(id) !== String(userId));
+
+  if (memberIds.length === 0) {
+    throw badRequest("NO_OTHER_MEMBERS", "Cần ít nhất một người khác trong cuộc trò chuyện");
+  }
+
+  if (memberIds.length + 1 > MAX_GROUP_MEMBERS) {
+    throw badRequest("GROUP_FULL", `Nhóm chỉ có tối đa ${MAX_GROUP_MEMBERS} thành viên`);
   }
 
   let conversation;
@@ -50,8 +60,6 @@ export const createConversation = async (req, res) => {
   }
 
   if (type === "group") {
-    // FIXME(Phase 6): chưa validate memberIds là ObjectId hợp lệ, chưa dedupe,
-    // chưa loại chính mình, chưa giới hạn số thành viên.
     conversation = new Conversation({
       type: "group",
       participants: [
@@ -79,19 +87,30 @@ export const createConversation = async (req, res) => {
   const formatted = serializeConversation(conversation, { viewerId: userId });
 
   const io = getIo();
+  const room = conversationRoom(conversation._id);
 
-  if (type === "group") {
-    memberIds.forEach((memberId) => {
-      io?.to(memberId).emit("new-group", formatted);
+  /*
+   * Gửi cho TẤT CẢ thành viên, kể cả người tạo.
+   *
+   * Bản cũ truyền thẳng `userId` (một ObjectId) vào `io.to()`, trong khi room được
+   * đặt tên bằng `user._id.toString()` — hai giá trị này không bằng nhau với
+   * socket.io, nên người tạo không bao giờ nhận được event về conversation vừa tạo,
+   * và với nhóm thì cũng chỉ có người khác nhận được.
+   */
+  const everyone = [String(userId), ...memberIds.map(String)];
+
+  everyone.forEach((memberId) => {
+    // Cho socket của họ vào room ngay, nếu không phải chờ tải lại trang mới nhận
+    // được tin nhắn realtime của conversation này.
+    io?.in(userRoom(memberId)).socketsJoin(room);
+
+    io?.to(userRoom(memberId)).emit(SERVER_EVENTS.CONVERSATION_CREATED, {
+      conversation: serializeConversation(conversation, { viewerId: memberId }),
     });
-  }
 
-  if (type === "direct") {
-    // FIXME(Phase 6): `userId` là ObjectId còn room được tạo từ `_id.toString()`,
-    // nên người tạo không bao giờ nhận được event này.
-    io?.to(userId).emit("new-group", formatted);
-    io?.to(memberIds[0]).emit("new-group", formatted);
-  }
+    // Alias tương thích cho bundle frontend đang mở tab; bỏ ở Phase 9.
+    io?.to(userRoom(memberId)).emit(LEGACY_EVENTS.NEW_GROUP, formatted);
+  });
 
   return res.status(201).json({ conversation: formatted });
 };

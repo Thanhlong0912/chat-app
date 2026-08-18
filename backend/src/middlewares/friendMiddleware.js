@@ -24,7 +24,12 @@ export const checkFriendship = async (req, res, next) => {
     return next();
   }
 
-  const friendChecks = memberIds.map(async (memberId) => {
+  // Bỏ qua chính mình: không ai là bạn của chính mình, và client hoàn toàn có thể
+  // gửi kèm id của người đang thao tác trong danh sách. Nếu không loại ở đây thì
+  // request bị 403 NOT_FRIENDS trước khi controller kịp lọc trùng.
+  const others = memberIds.filter((id) => String(id) !== me);
+
+  const friendChecks = others.map(async (memberId) => {
     const [userA, userB] = pair(me, memberId);
     const friend = await Friend.findOne({ userA, userB });
     return friend ? null : memberId;

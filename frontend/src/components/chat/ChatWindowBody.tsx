@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { ArrowDown, Loader2 } from "lucide-react";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
+import SystemMessage from "./SystemMessage";
 import TypingIndicator from "./TypingIndicator";
 import { useMarkAsRead } from "@/hooks/useMarkAsRead";
 import { useChatScroll } from "@/hooks/useChatScroll";
@@ -117,15 +118,25 @@ const ChatWindowBody = () => {
           </div>
         )}
 
-        {messages.map((message, index) => (
-          <MessageItem
-            key={message._id}
-            message={message}
-            index={index}
-            messages={messages}
-            selectedConvo={selectedConvo}
-          />
-        ))}
+        {messages.map((message, index) =>
+          // Phân nhánh ở ĐÂY chứ không bằng early return trong MessageItem: return
+          // sớm trước các hook sẽ làm số hook thay đổi giữa các lần render.
+          message.kind === "system" ? (
+            <SystemMessage
+              key={message._id}
+              message={message}
+              conversation={selectedConvo}
+            />
+          ) : (
+            <MessageItem
+              key={message._id}
+              message={message}
+              index={index}
+              messages={messages}
+              selectedConvo={selectedConvo}
+            />
+          ),
+        )}
 
         <TypingIndicator conversationId={selectedConvo._id} />
       </div>

@@ -1,6 +1,8 @@
-import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Info } from "lucide-react";
 import { SidebarTrigger, useSidebar } from "../ui/sidebar";
 import { Button } from "../ui/button";
+import GroupInfoPanel from "../group/GroupInfoPanel";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useActiveConversation } from "@/stores/useChatStore";
 import { useLastSeen, usePresence, useTypingNames } from "@/stores/useSocketStore";
@@ -20,6 +22,7 @@ const ChatWindowHeader = () => {
   const chat = useActiveConversation();
   const user = useAuthStore((s) => s.user);
   const { setOpenMobile } = useSidebar();
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const otherUser =
     chat?.type === "direct" ? chat.participants.find((p) => p._id !== user?._id) : undefined;
@@ -102,12 +105,32 @@ const ChatWindowHeader = () => {
             )}
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="truncate font-semibold text-foreground">{title}</h2>
             <p className="truncate text-xs text-muted-foreground">{subtitle()}</p>
           </div>
+
+          {chat.type === "group" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-9 shrink-0"
+              onClick={() => setInfoOpen(true)}
+              aria-label="Thông tin nhóm"
+            >
+              <Info className="size-4" />
+            </Button>
+          )}
         </div>
       </div>
+
+      {chat.type === "group" && (
+        <GroupInfoPanel
+          conversation={chat}
+          open={infoOpen}
+          onOpenChange={setInfoOpen}
+        />
+      )}
     </header>
   );
 };

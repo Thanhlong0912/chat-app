@@ -34,6 +34,10 @@ const countReaders = (conversation: Conversation, message: Message) => {
   ).length;
 };
 
+// Tin nhắn hệ thống được render bởi component cha (ChatWindowBody), KHÔNG phải
+// bằng một early return ở đây: return sớm trước các hook sẽ làm số hook thay đổi
+// giữa các lần render và React sẽ ném "Rendered more hooks than during the
+// previous render".
 const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemProps) => {
   const meId = useAuthStore((s) => s.user?._id);
 
