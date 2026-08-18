@@ -103,6 +103,23 @@ export function emitWithAck(socket, event, payload, { timeout = 2000 } = {}) {
 }
 
 /**
+ * Emit rồi chờ ack, trả `null` nếu KHÔNG có ack nào tới.
+ *
+ * Dùng để chứng minh một event không còn được xử lý: socket.io im lặng bỏ qua
+ * event không có handler, nên "không có ack" chính là bằng chứng.
+ */
+export function emitExpectingNoAck(socket, event, payload, { timeout = 400 } = {}) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), timeout);
+
+    socket.emit(event, payload, (response) => {
+      clearTimeout(timer);
+      resolve(response ?? { ok: true });
+    });
+  });
+}
+
+/**
  * Thu các event nhận được trong một khoảng thời gian.
  *
  * Dùng để khẳng định điều *không* xảy ra (ví dụ người ngoài không nhận tin nhắn),

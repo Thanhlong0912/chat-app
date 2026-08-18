@@ -45,8 +45,6 @@ export interface Conversation {
   /** Số chưa đọc của chính người đang xem, do server tính. */
   unreadCount: number;
   myRole: GroupRole | null;
-  /** @deprecated thay bằng `participants[].lastReadAt` */
-  seenBy: string[];
   pinned: boolean;
   createdAt: string;
   updatedAt: string;

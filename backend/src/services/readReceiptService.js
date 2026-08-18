@@ -88,11 +88,7 @@ export async function advanceRead({ conversation, userId, lastReadMessageId }) {
 
   await Conversation.updateOne(
     { _id: conversation._id },
-    {
-      $set: { [`unreadCounts.${userId}`]: unreadCount },
-      // @deprecated — vẫn ghi thêm một release để client cũ không hỏng.
-      $addToSet: { seenBy: new mongoose.Types.ObjectId(String(userId)) },
-    },
+    { $set: { [`unreadCounts.${userId}`]: unreadCount } },
   );
 
   return { lastReadAt, unreadCount, advanced };

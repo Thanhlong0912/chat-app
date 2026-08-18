@@ -299,20 +299,6 @@ function registerListeners(socket: AppSocket, set: Setter, get: Getter) {
       };
     });
   });
-
-  // --- Tương thích với tên event cũ ---
-  // Server còn phát song song một release. Chỉ nghe `online-users` để không mất
-  // dấu online nếu server chưa kịp deploy bản mới.
-  socket.on("online-users" as keyof ServerToClientEvents, ((userIds: string[]) => {
-    if (!Array.isArray(userIds)) return;
-    if (Object.keys(get().presence).length > 0) return; // đã có dữ liệu mới, bỏ qua
-
-    const presence: SocketState["presence"] = {};
-    userIds.forEach((id) => {
-      presence[id] = { status: "online", lastSeenAt: null };
-    });
-    set({ presence });
-  }) as never);
 }
 
 /**

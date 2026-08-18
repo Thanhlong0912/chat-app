@@ -61,6 +61,15 @@ function App() {
         richColors
         // Không có prop này, toast luôn ở giao diện sáng dù app đang ở chế độ tối.
         theme={isDark ? "dark" : "light"}
+        /*
+          Trên đỉnh, không phải góc dưới phải (mặc định của sonner).
+
+          Góc dưới phải đúng chỗ nút Gửi. Toast "có tin nhắn mới" thêm ở Phase 8
+          nghĩa là mỗi lần ai đó nhắn tới trong lúc bạn đang soạn, nút Gửi bị che
+          mất vài giây — bấm vào chỉ trúng toast. Chuyển lên trên là xong, không
+          cần z-index hay offset gì thêm.
+        */
+        position="top-center"
       />
       <BrowserRouter>
         <Routes>

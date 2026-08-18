@@ -31,9 +31,9 @@ export async function assertMembership(socket, conversationId) {
  */
 export function withMembership(handler, { key = "conversationId", full = false } = {}) {
   return async (socket, payload, ack) => {
-    // Cho phép client gửi trực tiếp một string id thay vì object, để tương thích
-    // với event `join-conversation` cũ.
-    const conversationId = typeof payload === "string" ? payload : payload?.[key];
+    // Payload luôn là object. Việc chấp nhận thêm một string trần trước đây chỉ
+    // để phục vụ alias `join-conversation`, nay đã bỏ cùng với nó.
+    const conversationId = payload?.[key];
 
     try {
       if (!conversationId) {

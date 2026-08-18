@@ -125,7 +125,7 @@ describe("lỗ #1: đọc tin nhắn của conversation không thuộc về mìn
 });
 
 describe("lỗ #2: mark-as-seen conversation không thuộc về mình", () => {
-  it("outsider không được thêm vào seenBy", async () => {
+  it("outsider không đẩy được con trỏ đã đọc của conversation người khác", async () => {
     await authedAgent(ctx.outsider)
       .patch(`/api/conversations/${ctx.group._id}/seen`)
       .expect(403);
@@ -133,7 +133,13 @@ describe("lỗ #2: mark-as-seen conversation không thuộc về mình", () => {
     const { default: Conversation } = await import("../src/models/Conversation.js");
     const fresh = await Conversation.findById(ctx.group._id).lean();
 
-    expect(fresh.seenBy.map(String)).not.toContain(String(ctx.outsider._id));
+    // Trước đây khẳng định trên mảng `seenBy` (nay đã bỏ). Trạng thái đọc giờ nằm
+    // ở participants[].lastReadAt, nên điều cần chứng minh là người ngoài không
+    // len được vào danh sách participant, lẫn vào bảng đếm chưa đọc.
+    const outsiderId = String(ctx.outsider._id);
+
+    expect(fresh.participants.map((p) => String(p.userId))).not.toContain(outsiderId);
+    expect(Object.keys(fresh.unreadCounts ?? {})).not.toContain(outsiderId);
   });
 });
 

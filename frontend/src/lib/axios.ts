@@ -68,10 +68,15 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const status = error.response?.status;
-    // Backend trả 401 cho token hết hạn / không hợp lệ. Vẫn nhận 403 vì
-    // `/auth/refresh` chưa đổi mã, và để bundle cũ đang mở tab không mất realtime.
-    const isAuthError = status === 401 || status === 403;
+    /*
+      CHỈ 401, không phải 403.
+
+      401 nghĩa là "token hỏng hoặc hết hạn" — làm mới rồi thử lại là đúng. 403
+      nghĩa là "token tốt, nhưng bạn không được phép" (`NOT_A_MEMBER`,
+      `INSUFFICIENT_ROLE`); làm mới token không đổi được điều đó, nên nhánh cũ chỉ
+      tổ gọi thừa /auth/refresh rồi thất bại y như cũ, mà lại che mất lỗi thật.
+    */
+    const isAuthError = error.response?.status === 401;
 
     // Chỉ thử lại đúng một lần. Trước đây cho phép 4 lần, nhưng nếu refresh đã
     // thất bại thì thử thêm chỉ là bốn cách đăng xuất chậm hơn.

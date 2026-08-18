@@ -178,12 +178,3 @@ export const CLIENT_EVENT_NAMES = [
   "sync:since",
   "auth:token",
 ] as const satisfies readonly (keyof ClientToServerEvents)[];
-
-/** Tên cũ, còn được phát song song đúng một release rồi bỏ ở Phase 9. */
-export const LEGACY_EVENT_NAMES = [
-  "join-conversation",
-  "new-message",
-  "read-message",
-  "new-group",
-  "online-users",
-] as const;

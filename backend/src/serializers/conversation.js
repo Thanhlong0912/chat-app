@@ -82,8 +82,6 @@ export function serializeConversation(doc, { viewerId } = {}) {
     // chính id của mình (và nhận undefined dưới một kiểu khai báo là number).
     unreadCount: viewerId ? readCount(plain.unreadCounts, viewerId) : 0,
     myRole: viewerId ? getRole(plain, viewerId) : null,
-    // @deprecated — thay bằng participant.lastReadAt. Còn ghi thêm một release.
-    seenBy: (plain.seenBy ?? []).map((u) => String(u?._id ?? u)),
     pinned: viewerId ? (plain.pinnedBy ?? []).some((id) => String(id) === String(viewerId)) : false,
     createdAt: plain.createdAt,
     updatedAt: plain.updatedAt,

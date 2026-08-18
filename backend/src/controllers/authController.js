@@ -6,7 +6,7 @@ import Session from "../models/Session.js";
 import { createRefreshToken, createTokenId, hashToken } from "../utils/tokens.js";
 import { invalidateSessionCache } from "../services/sessionService.js";
 import logger from "../utils/logger.js";
-import { conflict, forbidden, unauthorized } from "../utils/errors.js";
+import { conflict, unauthorized } from "../utils/errors.js";
 
 const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL = 14 * 24 * 60 * 60 * 1000; // 14 ngày
@@ -49,9 +49,15 @@ const signAccessToken = ({ userId, sessionId }) =>
     { expiresIn: ACCESS_TOKEN_TTL },
   );
 
-/** Tra cứu session chấp nhận cả hash mới và token phẳng của bản ghi cũ. */
-const findSessionByToken = (raw) =>
-  Session.findOne({ refreshToken: { $in: [hashToken(raw), raw] } });
+/**
+ * Tra cứu session theo băm của token.
+ *
+ * Trước đây còn chấp nhận token dạng phẳng của những bản ghi tạo từ thời chưa
+ * băm. Nhánh đó đã bỏ: TTL của session là 14 ngày nên không còn bản ghi nào như
+ * vậy tồn tại, và giữ lại tức là vẫn cho phép đăng nhập bằng đúng chuỗi nằm
+ * trong database — thứ mà việc băm sinh ra để loại trừ.
+ */
+const findSessionByToken = (raw) => Session.findOne({ refreshToken: hashToken(raw) });
 
 const issueSession = async (req, res, { userId, familyId }) => {
   const raw = createRefreshToken();
@@ -169,15 +175,22 @@ export const refreshToken = async (req, res) => {
 
   const session = await findSessionByToken(token);
 
-  // Giữ 403 (thay vì 401) cho refresh token không hợp lệ: interceptor phía client
-  // hiện dựa vào mã này. Sẽ hợp nhất về 401 ở Phase 9 sau khi client đã nhận cả hai.
+  /*
+    401 chứ không phải 403.
+
+    Cả ba trường hợp dưới đây đều là "thông tin xác thực không dùng được", tức
+    đúng nghĩa 401. 403 dành cho "đã xác thực rồi nhưng không đủ quyền" —
+    `NOT_A_MEMBER`, `INSUFFICIENT_ROLE`. Trước đây dùng 403 chỉ vì interceptor cũ
+    của client bám vào mã đó; nay client đã bỏ nhánh 403, nên gộp về đúng ngữ nghĩa.
+    `code` vẫn phân biệt ba tình huống cho việc chẩn đoán.
+  */
   if (!session) {
-    throw forbidden("REFRESH_TOKEN_INVALID", "Token không hợp lệ hoặc đã hết hạn");
+    throw unauthorized("REFRESH_TOKEN_INVALID", "Token không hợp lệ hoặc đã hết hạn");
   }
 
   if (session.expiresAt < new Date()) {
     await Session.deleteOne({ _id: session._id });
-    throw forbidden("REFRESH_TOKEN_EXPIRED", "Token đã hết hạn.");
+    throw unauthorized("REFRESH_TOKEN_EXPIRED", "Token đã hết hạn.");
   }
 
   if (session.rotatedAt) {
@@ -194,7 +207,7 @@ export const refreshToken = async (req, res) => {
 
       logger.warn(`Phát hiện dùng lại refresh token cho user ${session.userId}`);
 
-      throw forbidden("REFRESH_TOKEN_REUSED", "Phiên đăng nhập đã bị thu hồi, hãy đăng nhập lại");
+      throw unauthorized("REFRESH_TOKEN_REUSED", "Phiên đăng nhập đã bị thu hồi, hãy đăng nhập lại");
     }
 
     // Trong khoảng ân hạn: đây là race của client, cấp access token mới nhưng

@@ -73,7 +73,6 @@ const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =
   unreadCounts: {},
   unreadCount: 0,
   myRole: null,
-  seenBy: [],
   pinned: false,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
