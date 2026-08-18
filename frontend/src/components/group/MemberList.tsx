@@ -77,8 +77,13 @@ const MemberRow = ({
         </p>
       </div>
 
+      {/*
+        `modal={false}` — xem ghi chú cùng lý do ở `MessageActions`: menu ở chế độ
+        modal chồng lớp với `ConfirmDialog` mở ngay sau nó, và để lại
+        `pointer-events: none` trên thẻ body.
+      */}
       {showMenu && (
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
