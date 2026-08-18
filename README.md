@@ -61,6 +61,33 @@ Two separate hosts, and they do **not** deploy together:
 
 Nothing in CI deploys anything. CI only tests.
 
+### Render service settings
+
+This is a monorepo and there is **no `package.json` at the repo root** — there
+never has been. So the Root Directory must point at the package being deployed,
+exactly like Vercel's is set to `frontend`:
+
+| Setting | Value |
+|---|---|
+| Root Directory | `backend` |
+| Build Command | `npm ci` |
+| Start Command | `npm start` |
+
+Leaving Root Directory empty makes the build run at the repo root, where there is
+no `package.json` to read, so it fails — and a failed deploy leaves the previous
+instance serving, which looks from outside exactly like a deploy that changed
+nothing.
+
+If Build or Start currently reach into the subdirectory themselves (`cd backend
+&& …`, `--prefix backend`), change all three together, or they will resolve to
+`backend/backend`.
+
+Environment variables come from the dashboard, not a `.env` file — `npm start`
+uses `--env-file-if-exists`, which no-ops when the file is absent. `PORT` is
+provided by Render. `CLIENT_URL` must be the deployed frontend origin
+(`https://chat-app-longbi.vercel.app`), not localhost, or CORS and the Socket.IO
+origin check will reject the real frontend.
+
 **Deploy the backend before the frontend.** The backend tolerates an older
 frontend; the reverse is not true. A new frontend against an old backend loses
 realtime entirely — it emits `conversation:subscribe` and listens for
