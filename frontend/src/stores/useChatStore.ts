@@ -80,6 +80,7 @@ export const useChatStore = create<ChatState>()(
       replyingTo: {},
       editingId: {},
       activeConversationId: null,
+      searchQuery: "",
       convoLoading: false,
       creating: false,
       error: null,
@@ -99,6 +100,8 @@ export const useChatStore = create<ChatState>()(
         }),
 
       setActiveConversation: (id) => set({ activeConversationId: id }),
+
+      setSearchQuery: (query) => set({ searchQuery: query }),
 
       setDraft: (conversationId, draft) =>
         set((state) => ({ drafts: { ...state.drafts, [conversationId]: draft } })),
@@ -549,6 +552,11 @@ export const useChatStore = create<ChatState>()(
         // Đã đọc hết rồi thì không gọi lại.
         if (conversation.unreadCount === 0) return;
 
+        // Con trỏ mới, suy ra ĐÚNG như server: từ `createdAt` đã lưu của tin nhắn
+        // mới nhất, không phải giờ của máy client.
+        const newestAt = newestId ? thread?.byId[newestId]?.createdAt : undefined;
+        const nextLastReadAt = newestAt ?? new Date().toISOString();
+
         // Cập nhật lạc quan để badge tắt ngay.
         set((state) => {
           const existing = state.conversationsById[convoId];
@@ -561,6 +569,18 @@ export const useChatStore = create<ChatState>()(
                 ...existing,
                 unreadCount: 0,
                 unreadCounts: { ...existing.unreadCounts, [me._id]: 0 },
+                /*
+                  Đẩy luôn con trỏ đã đọc CỦA CHÍNH MÌNH.
+
+                  Server phát `read:updated` bằng `socket.to(...)`, tức là cố tình
+                  không gửi lại cho chính người đọc — nên nếu ở đây không tự ghi,
+                  bản sao phía client sẽ giữ nguyên giá trị lúc tải trang mãi mãi.
+                  Hệ quả: vạch "chưa đọc" không bao giờ hiện được, vì nó cần biết
+                  lần đọc TRƯỚC dừng ở đâu.
+                */
+                participants: existing.participants.map((p) =>
+                  p._id === me._id ? { ...p, lastReadAt: nextLastReadAt } : p,
+                ),
               },
             },
           };
@@ -707,9 +727,26 @@ export const useConversationOrder = () =>
  */
 export const useConversationIdsByType = (type: "direct" | "group") =>
   useChatStore(
-    useShallow((s) =>
-      s.conversationOrder.filter((id) => s.conversationsById[id]?.type === type),
-    ),
+    useShallow((s) => {
+      const query = s.searchQuery.trim().toLowerCase();
+
+      return s.conversationOrder.filter((id) => {
+        const conversation = s.conversationsById[id];
+        if (conversation?.type !== type) return false;
+        if (!query) return true;
+
+        // Khớp theo tên nhóm, tên thành viên, hoặc nội dung tin nhắn cuối.
+        const haystack = [
+          conversation.group?.name ?? "",
+          ...conversation.participants.map((p) => p.displayName ?? ""),
+          conversation.lastMessage?.content ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return haystack.includes(query);
+      });
+    }),
   );
 
 export const useConversation = (id: string | null | undefined) =>

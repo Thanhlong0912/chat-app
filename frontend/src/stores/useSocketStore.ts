@@ -8,6 +8,8 @@ import type {
   ServerToClientEvents,
 } from "@/types/socket";
 import type { Message } from "@/types/chat";
+import { toast } from "sonner";
+import { notify } from "@/lib/notifications";
 import { useAuthStore } from "./useAuthStore";
 import { useChatStore } from "./useChatStore";
 
@@ -241,6 +243,8 @@ function registerListeners(socket: AppSocket, set: Setter, get: Getter) {
      * observer hiển thị của danh sách tin nhắn, nơi biết chắc người dùng đang thực
      * sự nhìn vào đó.
      */
+
+    notifyIncoming(message, conversation._id);
   });
 
   socket.on("message:updated", ({ message }) => {
@@ -309,6 +313,57 @@ function registerListeners(socket: AppSocket, set: Setter, get: Getter) {
     });
     set({ presence });
   }) as never);
+}
+
+/**
+ * Thông báo cho một tin nhắn đến.
+ *
+ * Ba tầng, và chỉ một tầng chạy:
+ *  1. Tin nhắn của chính mình, hoặc đang mở đúng cuộc trò chuyện đó VÀ tab đang
+ *     hiển thị → không thông báo gì. Đây là yêu cầu "không thông báo trùng khi
+ *     conversation đang mở".
+ *  2. Tab bị ẩn → thông báo trình duyệt (nếu người dùng đã bật).
+ *  3. Còn lại → toast trong ứng dụng, bấm vào thì mở cuộc trò chuyện.
+ */
+function notifyIncoming(message: Message, conversationId: string) {
+  const chat = useChatStore.getState();
+  const me = useAuthStore.getState().user;
+
+  if (!me || message.senderId === me._id) return;
+
+  const isActive = chat.activeConversationId === conversationId;
+  const isVisible = document.visibilityState === "visible";
+
+  if (isActive && isVisible) return;
+
+  const preferences = me.preferences;
+  const conversation = chat.conversationsById[conversationId];
+
+  const title =
+    conversation?.type === "group"
+      ? (conversation.group?.name ?? "Nhóm chat")
+      : (message.sender?.displayName ?? "Tin nhắn mới");
+
+  const body =
+    conversation?.type === "group" && message.sender?.displayName
+      ? `${message.sender.displayName}: ${message.content ?? "Đã gửi một ảnh"}`
+      : (message.content ?? "Đã gửi một ảnh");
+
+  const open = () => {
+    useChatStore.getState().setActiveConversation(conversationId);
+  };
+
+  if (!isVisible && preferences?.browserNotifications !== false) {
+    const shown = notify({ title, body, conversationId, onClick: open });
+    if (shown) return;
+  }
+
+  if (preferences?.inAppNotifications === false) return;
+
+  toast(title, {
+    description: body,
+    action: { label: "Mở", onClick: open },
+  });
 }
 
 /** Lấy lại phần tin nhắn bị bỏ lỡ trong lúc mất kết nối. */

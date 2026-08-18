@@ -1,3 +1,14 @@
+/**
+ * Tuỳ chọn của người dùng, lưu ở server để đồng bộ giữa các thiết bị.
+ * Tất cả đều optional vì tài khoản cũ có thể chưa có field này.
+ */
+export interface UserPreferences {
+  inAppNotifications?: boolean;
+  browserNotifications?: boolean;
+  showPresence?: boolean;
+  enterToSend?: boolean;
+}
+
 export interface User {
   _id: string;
   username: string;
@@ -6,6 +17,7 @@ export interface User {
   avatarUrl?: string;
   bio?: string;
   phone?: string;
+  preferences?: UserPreferences;
   createdAt?: string;
   updatedAt?: string;
 }

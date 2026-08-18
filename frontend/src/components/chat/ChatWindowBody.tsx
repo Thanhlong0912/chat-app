@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo } from "react";
-import { ArrowDown, Loader2 } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo } from "react";
+import { ArrowDown } from "lucide-react";
+import { Spinner } from "../ui/spinner";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
 import SystemMessage from "./SystemMessage";
 import TypingIndicator from "./TypingIndicator";
+import UnreadDivider from "./UnreadDivider";
+import { useUnreadAnchor } from "@/hooks/useUnreadAnchor";
 import { useMarkAsRead } from "@/hooks/useMarkAsRead";
 import { useChatScroll } from "@/hooks/useChatScroll";
 import {
@@ -47,6 +50,9 @@ const ChatWindowBody = () => {
       onLoadOlder: loadOlder,
     });
 
+  // Chốt vị trí vạch "chưa đọc" TRƯỚC khi markAsSeen đẩy con trỏ đi.
+  const unreadAnchorId = useUnreadAnchor(conversationId);
+
   useMarkAsRead(conversationId, selectedConvo?.unreadCount ?? 0);
 
   // Tải trang đầu khi luồng chưa có dữ liệu. Cần cho trường hợp
@@ -61,6 +67,23 @@ const ChatWindowBody = () => {
   if (!selectedConvo) return <ChatWelcomeScreen />;
 
   const isEmpty = messages.length === 0;
+
+  // Phân nhánh ở ĐÂY chứ không bằng early return trong MessageItem: return sớm
+  // trước các hook sẽ làm số hook thay đổi giữa các lần render.
+  const renderMessage = (message: (typeof messages)[number], index: number) =>
+    message.kind === "system" ? (
+      <SystemMessage
+        message={message}
+        conversation={selectedConvo}
+      />
+    ) : (
+      <MessageItem
+        message={message}
+        index={index}
+        messages={messages}
+        selectedConvo={selectedConvo}
+      />
+    );
 
   return (
     // `relative` để đặt pill và nút xuống đáy; `min-h-0` để phần tử cuộn bên trong
@@ -86,14 +109,14 @@ const ChatWindowBody = () => {
 
         {status === "loading" && !isEmpty && (
           <p className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3 animate-spin" />
+            <Spinner className="size-3" />
             Đang tải tin nhắn cũ hơn…
           </p>
         )}
 
         {status === "loading" && isEmpty && (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Spinner />
             Đang tải tin nhắn…
           </div>
         )}
@@ -118,25 +141,12 @@ const ChatWindowBody = () => {
           </div>
         )}
 
-        {messages.map((message, index) =>
-          // Phân nhánh ở ĐÂY chứ không bằng early return trong MessageItem: return
-          // sớm trước các hook sẽ làm số hook thay đổi giữa các lần render.
-          message.kind === "system" ? (
-            <SystemMessage
-              key={message._id}
-              message={message}
-              conversation={selectedConvo}
-            />
-          ) : (
-            <MessageItem
-              key={message._id}
-              message={message}
-              index={index}
-              messages={messages}
-              selectedConvo={selectedConvo}
-            />
-          ),
-        )}
+        {messages.map((message, index) => (
+          <Fragment key={message._id}>
+            {message._id === unreadAnchorId && <UnreadDivider />}
+            {renderMessage(message, index)}
+          </Fragment>
+        ))}
 
         <TypingIndicator conversationId={selectedConvo._id} />
       </div>

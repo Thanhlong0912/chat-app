@@ -47,6 +47,28 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    /**
+     * Tuỳ chọn của người dùng.
+     *
+     * Lưu ở server thay vì localStorage để đồng bộ giữa các thiết bị — người dùng
+     * tắt thông báo trên máy tính thì điện thoại cũng phải im.
+     */
+    preferences: {
+      type: new mongoose.Schema(
+        {
+          /** Bật thông báo trong ứng dụng (toast). */
+          inAppNotifications: { type: Boolean, default: true },
+          /** Bật thông báo của trình duyệt. */
+          browserNotifications: { type: Boolean, default: false },
+          /** Cho người khác thấy trạng thái online của mình. */
+          showPresence: { type: Boolean, default: true },
+          /** Gửi bằng phím Enter (tắt thì Enter xuống dòng, Ctrl+Enter gửi). */
+          enterToSend: { type: Boolean, default: true },
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
   },
   {
     timestamps: true,

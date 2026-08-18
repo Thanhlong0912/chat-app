@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImagePlus, Loader2, Pencil, Reply, Send, X } from "lucide-react";
+import { ImagePlus, Pencil, Reply, Send, X } from "lucide-react";
+import { Spinner } from "../ui/spinner";
 import { toast } from "sonner";
 import type { Conversation } from "@/types/chat";
 import { Button } from "../ui/button";
@@ -246,7 +247,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           aria-label="Gửi ảnh"
         >
           {uploading ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Spinner />
           ) : (
             <ImagePlus className="size-4" />
           )}

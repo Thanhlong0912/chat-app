@@ -377,6 +377,17 @@
     .transition-bounce {
       transition: none;
     }
+
+    /*
+      Spinner thì làm CHẬM chứ không dừng hẳn.
+
+      `animation: none` trên một chỉ báo đang tải sẽ biến nó thành một biểu tượng
+      đứng im — trông y như giao diện bị treo, tức là truyền đạt sai hẳn ý nghĩa.
+      Vòng quay chậm vẫn nói "đang chạy" mà không gây khó chịu.
+    */
+    .animate-spin {
+      animation-duration: 2s;
+    }
   }
 }
 

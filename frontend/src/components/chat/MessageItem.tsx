@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, CheckCheck, Loader2, RotateCw } from "lucide-react";
+import { Check, CheckCheck, RotateCw } from "lucide-react";
+import { Spinner } from "../ui/spinner";
 import { cn, formatDaySeparator, formatMessageTime, isSameDay } from "@/lib/utils";
 import type { Conversation, Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -198,7 +199,7 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
             <span className="flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
               {message.status === "sending" && (
                 <>
-                  <Loader2 className="size-3 animate-spin" />
+                  <Spinner className="size-3" />
                   Đang gửi
                 </>
               )}

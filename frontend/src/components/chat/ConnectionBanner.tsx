@@ -1,4 +1,5 @@
-import { Loader2, WifiOff } from "lucide-react";
+import { WifiOff } from "lucide-react";
+import { Spinner } from "../ui/spinner";
 import { useConnectionStatus } from "@/stores/useSocketStore";
 
 /**
@@ -28,7 +29,7 @@ const ConnectionBanner = () => {
     >
       {reconnecting ? (
         <>
-          <Loader2 className="size-3.5 animate-spin" />
+          <Spinner className="size-3.5" />
           Đang kết nối lại…
         </>
       ) : (

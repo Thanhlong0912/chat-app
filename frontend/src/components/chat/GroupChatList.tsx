@@ -1,13 +1,14 @@
-import { useConversationIdsByType } from "@/stores/useChatStore";
+import { useChatStore, useConversationIdsByType } from "@/stores/useChatStore";
 import GroupChatCard from "./GroupChatCard";
 
 const GroupChatList = () => {
   const ids = useConversationIdsByType("group");
+  const isSearching = useChatStore((s) => s.searchQuery.trim().length > 0);
 
   if (ids.length === 0) {
     return (
       <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-        Bạn chưa tham gia nhóm nào.
+        {isSearching ? "Không có nhóm nào khớp." : "Bạn chưa tham gia nhóm nào."}
       </p>
     );
   }

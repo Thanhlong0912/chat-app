@@ -4,6 +4,8 @@ import ChatAppPage from "./pages/ChatAppPage";
 import { Toaster } from "sonner";
 import SignUpPage from "./pages/SignUpPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { useUnreadBadge } from "./hooks/useUnreadBadge";
 import { useThemeStore } from "./stores/useThemeStore";
 import { useEffect } from "react";
 import { useAuthStore } from "./stores/useAuthStore";
@@ -23,6 +25,9 @@ function App() {
    * dùng nhấp nháy với tất cả bạn bè, và mọi room phải join lại.
    */
   const isAuthenticated = useAuthStore((s) => Boolean(s.accessToken));
+
+  // Số chưa đọc hiển thị ngay trên tiêu đề tab và favicon.
+  useUnreadBadge();
 
   useEffect(() => {
     setTheme(isDark);
@@ -51,7 +56,7 @@ function App() {
   }, [isAuthenticated]);
 
   return (
-    <>
+    <ErrorBoundary>
       <Toaster
         richColors
         // Không có prop này, toast luôn ở giao diện sáng dù app đang ở chế độ tối.
@@ -78,7 +83,7 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
-    </>
+    </ErrorBoundary>
   );
 }
 

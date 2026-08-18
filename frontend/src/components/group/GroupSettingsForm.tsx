@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { ImagePlus, Loader2 } from "lucide-react";
+import { ImagePlus } from "lucide-react";
+import { Spinner } from "../ui/spinner";
 import type { Conversation } from "@/types/chat";
 import { useGroupActions } from "@/hooks/useGroupActions";
 import { Button } from "../ui/button";
@@ -80,7 +81,7 @@ const GroupSettingsForm = ({ conversation }: { conversation: Conversation }) => 
             onClick={() => actions.rename(name.trim())}
             disabled={!nameChanged || !name.trim() || actions.pending}
           >
-            {actions.pending ? <Loader2 className="size-4 animate-spin" /> : "Lưu"}
+            {actions.pending ? <Spinner label="Đang lưu" /> : "Lưu"}
           </Button>
         </div>
       </div>

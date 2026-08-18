@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { delay, http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import { useChatStore } from "./useChatStore";
+import { renderHook } from "@testing-library/react";
+import { useChatStore, useConversationIdsByType } from "./useChatStore";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
 import type { Conversation, Message } from "@/types/chat";
@@ -40,6 +41,7 @@ beforeEach(() => {
     pending: {},
     drafts: {},
     activeConversationId: null,
+    searchQuery: "",
     convoLoading: false,
     creating: false,
     error: null,
@@ -497,5 +499,75 @@ describe("removeConversation", () => {
     expect(useChatStore.getState().conversationsById).toEqual({});
     expect(useChatStore.getState().messages["convo-1"]).toBeUndefined();
     expect(useChatStore.getState().activeConversationId).toBeNull();
+  });
+});
+
+describe("lọc tìm kiếm cuộc trò chuyện", () => {
+  const seedSearchable = () => {
+    seedConversation(
+      makeConversation({
+        _id: "a",
+        lastMessageAt: "2026-01-03T00:00:00.000Z",
+        participants: [
+          { _id: ME, displayName: "Tôi", avatarUrl: null, joinedAt: null, role: null, lastReadAt: null },
+          { _id: OTHER, displayName: "Ngọc Mai", avatarUrl: null, joinedAt: null, role: null, lastReadAt: null },
+        ] as never,
+      }),
+    );
+    seedConversation(
+      makeConversation({
+        _id: "b",
+        lastMessageAt: "2026-01-02T00:00:00.000Z",
+        participants: [
+          { _id: ME, displayName: "Tôi", avatarUrl: null, joinedAt: null, role: null, lastReadAt: null },
+          { _id: "u3", displayName: "Trần Bình", avatarUrl: null, joinedAt: null, role: null, lastReadAt: null },
+        ] as never,
+        lastMessage: { _id: "m1", content: "hẹn gặp ở quán cà phê", senderId: "u3" } as never,
+      }),
+    );
+  };
+
+  it("không lọc gì khi ô tìm kiếm rỗng", () => {
+    seedSearchable();
+
+    const { result } = renderHook(() => useConversationIdsByType("direct"));
+
+    expect(result.current).toEqual(["a", "b"]);
+  });
+
+  it("khớp theo tên thành viên, không phân biệt hoa thường", () => {
+    seedSearchable();
+    useChatStore.getState().setSearchQuery("ngọc");
+
+    const { result } = renderHook(() => useConversationIdsByType("direct"));
+
+    expect(result.current).toEqual(["a"]);
+  });
+
+  it("khớp cả nội dung tin nhắn cuối", () => {
+    seedSearchable();
+    useChatStore.getState().setSearchQuery("cà phê");
+
+    const { result } = renderHook(() => useConversationIdsByType("direct"));
+
+    expect(result.current).toEqual(["b"]);
+  });
+
+  it("vẫn tôn trọng bộ lọc loại: tìm trong nhóm không trả về hội thoại riêng", () => {
+    seedSearchable();
+    useChatStore.getState().setSearchQuery("ngọc");
+
+    const { result } = renderHook(() => useConversationIdsByType("group"));
+
+    expect(result.current).toEqual([]);
+  });
+
+  it("trả về rỗng khi không có gì khớp", () => {
+    seedSearchable();
+    useChatStore.getState().setSearchQuery("zzzz");
+
+    const { result } = renderHook(() => useConversationIdsByType("direct"));
+
+    expect(result.current).toEqual([]);
   });
 });

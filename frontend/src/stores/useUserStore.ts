@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
 import { toast } from "sonner";
 import { useChatStore } from "./useChatStore";
+import { describeError } from "@/lib/errors";
 
 export const useUserStore = create<UserState>(() => ({
   updateAvatarUrl: async (formData) => {
@@ -12,16 +13,25 @@ export const useUserStore = create<UserState>(() => ({
       const data = await userService.uploadAvatar(formData);
 
       if (user) {
-        setUser({
-          ...user,
-          avatarUrl: data.avatarUrl,
-        });
+        setUser({ ...user, avatarUrl: data.avatarUrl });
 
-        useChatStore.getState().fetchConversations();
+        // Avatar xuất hiện trong danh sách participant, nên phải tải lại để các
+        // cuộc trò chuyện hiển thị ảnh mới.
+        void useChatStore.getState().fetchConversations();
       }
     } catch (error) {
-      console.error("Lỗi khi updateAvatarUrl", error);
-      toast.error("Upload avatar không thành công!");
+      toast.error(describeError(error));
     }
+  },
+
+  /**
+   * Cập nhật hồ sơ / tuỳ chọn.
+   *
+   * Cố tình NÉM lỗi ra ngoài thay vì nuốt: form cần biết để tô đỏ đúng field.
+   */
+  updateProfile: async (payload) => {
+    const user = await userService.updateProfile(payload);
+    useAuthStore.getState().setUser(user);
+    return user;
   },
 }));

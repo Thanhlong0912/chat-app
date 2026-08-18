@@ -1,6 +1,6 @@
 import type { Socket } from "socket.io-client";
 import type { Conversation, Message } from "./chat";
-import type { Friend, FriendRequest, User } from "./user";
+import type { Friend, FriendRequest, User, UserPreferences } from "./user";
 import type {
   ClientToServerEvents,
   PresenceStatus,
@@ -75,6 +75,8 @@ export interface ChatState {
   /** Tin nhắn đang được sửa, theo từng conversation. */
   editingId: Record<string, string | undefined>;
   activeConversationId: string | null;
+  /** Chuỗi lọc danh sách cuộc trò chuyện ở sidebar. */
+  searchQuery: string;
   convoLoading: boolean;
   creating: boolean;
   error: string | null;
@@ -82,6 +84,7 @@ export interface ChatState {
   reset: () => void;
   setActiveConversation: (id: string | null) => void;
   setDraft: (conversationId: string, draft: string) => void;
+  setSearchQuery: (query: string) => void;
   clearError: () => void;
 
   fetchConversations: () => Promise<void>;
@@ -180,4 +183,10 @@ export interface FriendState {
 
 export interface UserState {
   updateAvatarUrl: (formData: FormData) => Promise<void>;
+  updateProfile: (payload: {
+    displayName?: string;
+    bio?: string | null;
+    phone?: string | null;
+    preferences?: UserPreferences;
+  }) => Promise<User>;
 }
