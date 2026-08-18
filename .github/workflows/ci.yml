@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Đẩy commit mới lên cùng một branch thì huỷ lượt chạy cũ — không có lý do gì để
+# trả tiền cho kết quả của một commit vừa bị thay thế.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Backend chạy `--env-file-if-exists`, cờ này cần Node 20 trở lên.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Cài dependency
+        working-directory: backend
+        run: npm ci
+
+      # mongodb-memory-server tải sẵn binary về cache; nếu không, mỗi job lại tải
+      # lại ~100MB và thỉnh thoảng hết giờ.
+      - name: Cache binary MongoDB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+
+      - name: Test
+        working-directory: backend
+        run: npm test
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Cài dependency
+        working-directory: frontend
+        run: npm ci
+
+      # `tsc --noEmit` trong thư mục này KHÔNG kiểm tra gì cả: nó phân giải về
+      # tsconfig.json gốc kiểu solution với `"files": []`. Phải là `tsc -b`.
+      - name: Kiểm tra kiểu
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
+      # Build là một cổng kiểm tra riêng: có những lỗi chỉ Rollup mới thấy (import
+      # vòng, asset thiếu) mà tsc và vitest đều cho qua.
+      - name: Build
+        working-directory: frontend
+        run: npm run build
