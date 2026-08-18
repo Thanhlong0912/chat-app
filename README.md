@@ -79,6 +79,17 @@ vercel git connect
 does not by itself re-arm the trap. Remove that block when both sides really are
 meant to ship together.
 
+That file also holds the install and build commands, which used to live only in
+Vercel's dashboard:
+
+- `npm ci` rather than `npm install --legacy-peer-deps` — the peer conflict is
+  fixed properly by the `overrides` block in `package.json`, and `npm ci` builds
+  strictly from the lockfile.
+- `npm run build` rather than `tsc --skipLibCheck && vite build`. The old command
+  typechecked **nothing**: bare `tsc` in this directory resolves the
+  solution-style root `tsconfig.json`, whose `"files": []` matches no input. The
+  script runs `tsc -b`, which does.
+
 **Run the migrations before the new backend serves traffic.** They are
 deliberately not run on boot — several instances booting at once would run them
 concurrently, and a slow one would block the deploy:

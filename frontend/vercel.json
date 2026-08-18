@@ -4,5 +4,7 @@
     "deploymentEnabled": {
       "main": false
     }
-  }
+  },
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build"
 }
