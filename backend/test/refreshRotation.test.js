@@ -67,12 +67,12 @@ describe("lưu trữ refresh token", () => {
   });
 });
 
-describe("session cũ lưu token phẳng", () => {
-  it("KHÔNG còn refresh được", async () => {
+describe("tương thích với session cũ lưu token phẳng", () => {
+  it("vẫn refresh được, và được chuyển sang dạng hash", async () => {
     const app = testApp();
     const user = await makeUser({ password: PASSWORD });
 
-    // Hình dạng dữ liệu của thời chưa băm: token gốc nằm thẳng trong DB.
+    // Đúng hình dạng dữ liệu production hiện tại: token gốc nằm thẳng trong DB.
     const legacyRaw = "a".repeat(128);
     await Session.create({
       userId: user._id,
@@ -80,31 +80,19 @@ describe("session cũ lưu token phẳng", () => {
       expiresAt: new Date(Date.now() + 86_400_000),
     });
 
-    // Nhánh đọc song song đã bỏ sau khi mọi session cũ hết hạn theo TTL 14 ngày.
-    // Đây là điều thực sự đáng khẳng định: chuỗi nằm trong database không còn tự
-    // nó là một thông tin xác thực hợp lệ — nếu không thì việc băm chẳng để làm gì.
-    await supertest(app)
-      .post("/api/auth/refresh")
-      .set("Cookie", [`refreshToken=${legacyRaw}`])
-      .expect(401);
-  });
-
-  it("token băm thì vẫn refresh bình thường", async () => {
-    const app = testApp();
-    const user = await makeUser({ password: PASSWORD });
-
-    const { cookie } = await signIn(app, user);
-
     const res = await supertest(app)
       .post("/api/auth/refresh")
-      .set("Cookie", [`refreshToken=${refreshTokenFrom(cookie)}`])
+      .set("Cookie", [`refreshToken=${legacyRaw}`])
       .expect(200);
 
-    // Cặp đôi với test trên: chứng minh 401 kia đến từ việc token phẳng bị từ
-    // chối, chứ không phải vì đường refresh đã hỏng hoàn toàn.
-    const newRaw = refreshTokenFrom(res.headers["set-cookie"]);
+    expect(res.body.accessToken).toBeTruthy();
 
-    expect(await Session.findOne({ refreshToken: hashToken(newRaw) }).lean()).not.toBeNull();
+    // Token mới phải được lưu dạng hash; đây là cách dữ liệu cũ tự di trú mà
+    // không cần đăng xuất ai.
+    const newRaw = refreshTokenFrom(res.headers["set-cookie"]);
+    const rotated = await Session.findOne({ refreshToken: hashToken(newRaw) }).lean();
+
+    expect(rotated).not.toBeNull();
   });
 });
 
@@ -153,7 +141,7 @@ describe("rotation", () => {
     const res = await supertest(app)
       .post("/api/auth/refresh")
       .set("Cookie", ["refreshToken=khong-ton-tai"])
-      .expect(401);
+      .expect(403);
 
     expect(res.body.code).toBe("REFRESH_TOKEN_INVALID");
   });
@@ -180,7 +168,7 @@ describe("rotation", () => {
     const res = await supertest(app)
       .post("/api/auth/refresh")
       .set("Cookie", [`refreshToken=${raw}`])
-      .expect(401);
+      .expect(403);
 
     expect(res.body.code).toBe("REFRESH_TOKEN_EXPIRED");
     expect(await Session.findOne({ refreshToken: hashToken(raw) })).toBeNull();
@@ -210,7 +198,7 @@ describe("phát hiện dùng lại token", () => {
     const res = await supertest(app)
       .post("/api/auth/refresh")
       .set("Cookie", [`refreshToken=${stolen}`])
-      .expect(401);
+      .expect(403);
 
     expect(res.body.code).toBe("REFRESH_TOKEN_REUSED");
     // Cả họ bị xoá, nên token mà kẻ tấn công lẫn người dùng thật đang giữ đều chết.

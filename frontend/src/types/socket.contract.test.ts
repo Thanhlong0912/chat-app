@@ -5,7 +5,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CLIENT_EVENT_NAMES, SERVER_EVENT_NAMES } from "./socket";
+import {
+  CLIENT_EVENT_NAMES,
+  LEGACY_EVENT_NAMES,
+  SERVER_EVENT_NAMES,
+} from "./socket";
 
 /**
  * Giữ hợp đồng socket của frontend đồng bộ với backend.
@@ -43,6 +47,7 @@ const extractBlock = (source: string, constName: string): string[] => {
 
 const backendClientEvents = extractBlock(backendEventsSource, "CLIENT_EVENTS");
 const backendServerEvents = extractBlock(backendEventsSource, "SERVER_EVENTS");
+const backendLegacyEvents = extractBlock(backendEventsSource, "LEGACY_EVENTS");
 
 describe("hợp đồng socket giữa frontend và backend", () => {
   it("đọc được file event của backend", () => {
@@ -59,10 +64,8 @@ describe("hợp đồng socket giữa frontend và backend", () => {
     expect([...backendServerEvents].sort()).toEqual([...SERVER_EVENT_NAMES].sort());
   });
 
-  it("không còn alias tên cũ nào ở backend", () => {
-    // Các alias (`new-message`, `online-users`, …) đã bỏ. Nếu ai đó thêm lại một
-    // bảng như vậy, hai bên sẽ lại âm thầm lệch nhau — nên chặn ngay ở đây.
-    expect(backendEventsSource).not.toContain("LEGACY_EVENTS");
+  it("tên event cũ khớp nhau", () => {
+    expect([...backendLegacyEvents].sort()).toEqual([...LEGACY_EVENT_NAMES].sort());
   });
 
   it("không có tên event nào bị trùng giữa hai chiều", () => {

@@ -15,9 +15,7 @@ const server = setupServer(
     refreshCalls += 1;
 
     if (refreshShouldFail) {
-      // Server đã gộp mọi lỗi refresh về 401 (403 nay chỉ dành cho "đủ xác thực
-      // nhưng không đủ quyền").
-      return HttpResponse.json({ code: "REFRESH_TOKEN_REUSED" }, { status: 401 });
+      return HttpResponse.json({ code: "REFRESH_TOKEN_REUSED" }, { status: 403 });
     }
 
     return HttpResponse.json({ accessToken: `token-moi-${refreshCalls}` });
@@ -99,24 +97,18 @@ describe("interceptor refresh", () => {
     expect(useAuthStore.getState().accessToken).toBe("token-moi-1");
   });
 
-  it("KHÔNG refresh khi gặp 403", async () => {
+  it("cũng refresh khi gặp 403, vì /auth/refresh vẫn dùng mã đó", async () => {
     server.use(
-      http.get(`${API}/one`, () =>
-        HttpResponse.json({ code: "NOT_A_MEMBER" }, { status: 403 }),
+      http.get(`${API}/one`, ({ request }) =>
+        request.headers.get("Authorization")?.includes("token-cu")
+          ? HttpResponse.json({}, { status: 403 })
+          : HttpResponse.json({ ok: true }),
       ),
     );
 
-    await expect(api.get("/one")).rejects.toMatchObject({
-      response: { status: 403 },
-    });
+    await api.get("/one");
 
-    /*
-      403 nghĩa là token hoàn toàn hợp lệ, chỉ là không đủ quyền — làm mới token
-      không đổi được gì. Nhánh cũ chấp nhận cả 403 nên mỗi lần vào nhầm một nhóm
-      không phải của mình lại kéo theo một lần gọi /auth/refresh vô ích, đồng thời
-      che mất lỗi thật đằng sau một vòng thử lại.
-    */
-    expect(refreshCalls).toBe(0);
+    expect(refreshCalls).toBe(1);
   });
 
   it("chỉ thử lại một lần rồi mới bỏ cuộc", async () => {

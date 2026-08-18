@@ -1,7 +1,12 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { getIo } from "../socket/io.js";
-import { SERVER_EVENTS, conversationRoom, userRoom } from "../socket/events.js";
+import {
+  LEGACY_EVENTS,
+  SERVER_EVENTS,
+  conversationRoom,
+  userRoom,
+} from "../socket/events.js";
 import { ROLES } from "../domain/groupPermissions.js";
 import { MAX_GROUP_MEMBERS } from "../services/groupService.js";
 import { decodeCursor, encodeCursor, newerThan, olderThan } from "../utils/cursor.js";
@@ -102,6 +107,9 @@ export const createConversation = async (req, res) => {
     io?.to(userRoom(memberId)).emit(SERVER_EVENTS.CONVERSATION_CREATED, {
       conversation: serializeConversation(conversation, { viewerId: memberId }),
     });
+
+    // Alias tương thích cho bundle frontend đang mở tab; bỏ ở Phase 9.
+    io?.to(userRoom(memberId)).emit(LEGACY_EVENTS.NEW_GROUP, formatted);
   });
 
   return res.status(201).json({ conversation: formatted });
@@ -230,7 +238,13 @@ export const markAsSeen = async (req, res) => {
       unreadCounts: Object.fromEntries(fresh?.unreadCounts ?? []),
     };
 
-    getIo()?.to(String(conversationId)).emit("read:updated", payload);
+    const io = getIo();
+    io?.to(String(conversationId)).emit("read:updated", payload);
+    // Alias tương thích cho bundle cũ đang mở tab; bỏ ở Phase 9.
+    io?.to(String(conversationId)).emit("read-message", {
+      conversation: serializeConversation(fresh, { viewerId: userId }),
+      lastMessage: serializeConversation(fresh, { viewerId: userId })?.lastMessage,
+    });
   }
 
   return res.status(200).json({

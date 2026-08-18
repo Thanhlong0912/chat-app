@@ -113,6 +113,19 @@ const conversationSchema = new mongoose.Schema(
     lastMessageAt: {
       type: Date,
     },
+    /**
+     * @deprecated Thay bằng `participants[].lastReadAt`.
+     *
+     * Chỉ mô tả được trạng thái đọc của tin nhắn CUỐI, và bị reset về [] mỗi khi
+     * có tin mới, nên không dựng được read receipt cho từng tin nhắn. Vẫn tiếp tục
+     * ghi thêm một release để client cũ không hỏng; bỏ ở Phase 9.
+     */
+    seenBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     lastMessage: {
       type: lastMessageSchema,
       default: null,

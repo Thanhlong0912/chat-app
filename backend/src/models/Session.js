@@ -16,8 +16,9 @@ const sessionSchema = new mongoose.Schema(
      * đụng unique trên giá trị null. Ghi hash vào đây giữ index tiếp tục đúng và
      * tránh phải migrate index — trong khi vẫn không còn lưu token dạng phẳng.
      *
-     * Nhánh đọc song song (chấp nhận cả token phẳng của bản ghi cũ) đã được bỏ:
-     * mọi session tạo trước khi băm đều đã hết hạn theo TTL 14 ngày.
+     * Bản ghi cũ (tạo trước thay đổi này) vẫn chứa token gốc; việc tra cứu chấp
+     * nhận cả hai dạng cho tới khi chúng hết hạn theo TTL 14 ngày. Đổi tên field
+     * và bỏ nhánh tương thích ở Phase 9.
      *
      * Dùng SHA-256 chứ không phải bcrypt: đây là 64 byte ngẫu nhiên từ CSPRNG,
      * không có gì để brute force, nên bcrypt chỉ tốn CPU mỗi lần refresh.

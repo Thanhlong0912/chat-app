@@ -1,9 +1,10 @@
 import User from "../../models/User.js";
-import { CLIENT_EVENTS, SERVER_EVENTS, userRoom } from "../events.js";
+import { CLIENT_EVENTS, LEGACY_EVENTS, SERVER_EVENTS, userRoom } from "../events.js";
 import {
   STATUS,
   addSocket,
   getStatus,
+  onlineUserIds,
   removeSocket,
   setAway,
   statusesFor,
@@ -88,6 +89,9 @@ export function registerPresenceHandlers(io, socket) {
     lastWrittenAt.delete(userId);
 
     await broadcastStatus(io, userId, STATUS.OFFLINE).catch(() => {});
+
+    // Alias tương thích: client cũ vẫn đợi danh sách online đầy đủ.
+    io.emit(LEGACY_EVENTS.ONLINE_USERS, onlineUserIds());
   });
 }
 
@@ -109,7 +113,11 @@ export async function onPresenceConnect(io, socket) {
 
   socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: statusesFor(audience) });
 
+  // Alias tương thích cho bundle cũ, vốn đợi `online-users` để vẽ dấu online.
+  socket.emit(LEGACY_EVENTS.ONLINE_USERS, onlineUserIds());
+
   if (becameOnline) {
     await broadcastStatus(io, userId, getStatus(userId));
+    io.emit(LEGACY_EVENTS.ONLINE_USERS, onlineUserIds());
   }
 }

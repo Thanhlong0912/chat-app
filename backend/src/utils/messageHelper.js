@@ -2,6 +2,9 @@ import { serializeMessage } from "../serializers/message.js";
 
 export const updateConversationAfterCreateMessage = (conversation, message, senderId) => {
   conversation.set({
+    // @deprecated — `seenBy` được thay bằng participants[].lastReadAt. Vẫn reset ở
+    // đây thêm một release để client cũ không hiển thị sai.
+    seenBy: [],
     lastMessageAt: message.createdAt,
     lastMessage: {
       _id: message._id,
@@ -65,4 +68,6 @@ export const emitNewMessage = (io, conversation, message) => {
   const room = conversation._id.toString();
 
   io.to(room).emit("message:new", payload);
+  // Alias tương thích cho bundle frontend đang mở tab; bỏ ở Phase 9.
+  io.to(room).emit("new-message", payload);
 };

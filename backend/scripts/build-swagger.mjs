@@ -177,12 +177,9 @@ const spec = {
         ].join(" "),
         responses: {
           200: { description: "Access token mới", ...json({ type: "object", properties: { accessToken: { type: "string" } } }) },
-          401: {
-            description: [
-              "`NO_REFRESH_TOKEN`, `REFRESH_TOKEN_INVALID`, `REFRESH_TOKEN_EXPIRED`, hoặc",
-              "`REFRESH_TOKEN_REUSED` (đã thu hồi toàn bộ phiên). Mọi trường hợp đều phải",
-              "đăng nhập lại; `code` phân biệt để chẩn đoán.",
-            ].join(" "),
+          401: { description: "Thiếu hoặc sai refresh token", ...json(ref("Error")) },
+          403: {
+            description: "`REFRESH_TOKEN_REUSED` — đã thu hồi toàn bộ phiên, phải đăng nhập lại",
             ...json(ref("Error")),
           },
           429: errRef("RateLimited"),
@@ -1008,6 +1005,12 @@ const spec = {
           },
           myRole: { type: "string", enum: ["owner", "admin", "member"], nullable: true },
           pinned: { type: "boolean" },
+          seenBy: {
+            type: "array",
+            items: { type: "string" },
+            deprecated: true,
+            description: "Đã thay bằng `participants[].lastReadAt`. Còn trả về thêm một release rồi bỏ.",
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },

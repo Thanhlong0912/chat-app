@@ -7,8 +7,8 @@
  * bên, và Render phải deploy kèm thư mục ngang cấp) mà vẫn khiến CI đỏ ngay khi
  * một bên đổi tên event.
  *
- * Quy ước: `miền:hành-động`. Các alias tên cũ (`new-message`, `online-users`, …)
- * đã được bỏ — xem ghi chú triển khai trong commit của Phase 9.
+ * Quy ước: `miền:hành-động`. Các tên không theo quy ước ở LEGACY_EVENTS là alias
+ * tương thích cho bundle frontend đang mở tab, sẽ bỏ ở Phase 9.
  */
 
 /** Client → Server. */
@@ -41,6 +41,20 @@ export const SERVER_EVENTS = Object.freeze({
   PRESENCE_SNAPSHOT: "presence:snapshot",
   PRESENCE_UPDATE: "presence:update",
   AUTH_REAUTH: "auth:reauth",
+});
+
+/**
+ * Tên cũ, vẫn được phát/nhận song song đúng một release.
+ *
+ * Frontend và backend deploy độc lập trên Render, nên nếu bỏ ngay thì một tab
+ * đang mở sẽ mất realtime cho tới khi người dùng tự tải lại trang.
+ */
+export const LEGACY_EVENTS = Object.freeze({
+  JOIN_CONVERSATION: "join-conversation",
+  NEW_MESSAGE: "new-message",
+  READ_MESSAGE: "read-message",
+  NEW_GROUP: "new-group",
+  ONLINE_USERS: "online-users",
 });
 
 /** Room riêng của một user, để gửi event nhắm đúng một người. */

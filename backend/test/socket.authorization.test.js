@@ -5,7 +5,6 @@ import { setIo, resetIo } from "../src/socket/io.js";
 import { emitNewMessage } from "../src/utils/messageHelper.js";
 import {
   collectEvents,
-  emitExpectingNoAck,
   emitWithAck,
   startSocketServer,
 } from "./helpers/socketHarness.js";
@@ -103,8 +102,8 @@ describe("lỗ #4: conversation:subscribe không kiểm tra quyền", () => {
       conversationId: String(group._id),
     });
 
-    const memberInbox = collectEvents(memberSocket, "message:new");
-    const outsiderInbox = collectEvents(outsiderSocket, "message:new");
+    const memberInbox = collectEvents(memberSocket, "new-message");
+    const outsiderInbox = collectEvents(outsiderSocket, "new-message");
 
     const message = await makeMessage(group, owner, { content: "bí mật của nhóm" });
     emitNewMessage(harness.ioServer, group, message);
@@ -117,19 +116,27 @@ describe("lỗ #4: conversation:subscribe không kiểm tra quyền", () => {
     expect(outsiderEvents).toHaveLength(0);
   });
 
-  it("alias join-conversation cũ đã bị gỡ hẳn", async () => {
+  it("alias join-conversation cũ cũng đã được kiểm tra quyền", async () => {
+    const [owner, outsider] = await Promise.all([makeUser(), makeUser()]);
+    const group = await makeGroupConversation(owner);
+
+    const socket = await harness.connect(outsider);
+
+    // Bundle frontend đang mở tab vẫn phát tên event cũ, nên nó phải tiếp tục
+    // hoạt động — nhưng không còn là cửa sau.
+    const ack = await emitWithAck(socket, "join-conversation", String(group._id));
+
+    expect(ack).toEqual({ ok: false, code: "NOT_A_MEMBER" });
+  });
+
+  it("alias cũ vẫn cho thành viên vào room, dạng string id", async () => {
     const [owner, member] = await Promise.all([makeUser(), makeUser()]);
     const group = await makeGroupConversation(owner, [member]);
 
     const socket = await harness.connect(member);
+    const ack = await emitWithAck(socket, "join-conversation", String(group._id));
 
-    // Alias tồn tại để tab đang mở không mất realtime giữa hai lần deploy. Nay đã
-    // bỏ: không còn handler nào, nên không có ack nào quay lại. Kể cả với một
-    // thành viên hợp lệ — nghĩa là cái tên đó thực sự chết, chứ không phải chỉ bị
-    // siết quyền.
-    const ack = await emitExpectingNoAck(socket, "join-conversation", String(group._id));
-
-    expect(ack).toBeNull();
+    expect(ack).toEqual({ ok: true });
   });
 
   it("id sai định dạng bị từ chối chứ không làm sập socket", async () => {
@@ -258,15 +265,14 @@ describe("payload của message:new", () => {
     expect(event.unreadCounts[String(bob._id)]).toBe(1);
   });
 
-  it("không còn phát tên event cũ new-message", async () => {
+  it("vẫn phát tên event cũ new-message cho client chưa cập nhật", async () => {
     const [alice, bob] = await Promise.all([makeUser(), makeUser()]);
     const { makeFriendship, makeDirectConversation } = await import("./helpers/factories.js");
     await makeFriendship(alice, bob);
     const convo = await makeDirectConversation(alice, bob);
 
     const socket = await harness.connect(bob);
-    const legacyInbox = collectEvents(socket, "new-message");
-    const currentInbox = collectEvents(socket, "message:new");
+    const inbox = collectEvents(socket, "new-message");
 
     const { authedAgent } = await import("./helpers/authedAgent.js");
     await authedAgent(alice)
@@ -278,10 +284,7 @@ describe("payload của message:new", () => {
       })
       .expect(201);
 
-    // Tên mới vẫn tới; tên cũ thì không. Khẳng định cả hai để test không thể pass
-    // chỉ vì tin nhắn không được gửi đi.
-    expect(await currentInbox).toHaveLength(1);
-    expect(await legacyInbox).toHaveLength(0);
+    expect(await inbox).toHaveLength(1);
   });
 });
 
@@ -292,7 +295,7 @@ describe("room tự động join khi connect", () => {
 
     // Server tự join mọi room của user lúc connect.
     const socket = await harness.connect(member);
-    const inbox = collectEvents(socket, "message:new");
+    const inbox = collectEvents(socket, "new-message");
 
     const message = await makeMessage(group, owner, { content: "tự động nhận" });
     emitNewMessage(harness.ioServer, group, message);
