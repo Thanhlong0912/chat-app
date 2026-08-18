@@ -69,5 +69,11 @@
     "typescript-eslint": "^8.45.0",
     "vite": "^7.1.7",
     "vitest": "^4.1.10"
+  },
+  "//overrides": "@emoji-mart/react 1.1.1 khai báo peer react '^16.8 || ^17 || ^18' và không còn được cập nhật, nên npm ci từ chối cài trên React 19. Override chỉ nới đúng peer đó về bản react của dự án, thay vì bật legacy-peer-deps cho toàn bộ (vốn sẽ giấu luôn những xung đột thật sau này).",
+  "overrides": {
+    "@emoji-mart/react": {
+      "react": "$react"
+    }
   }
 }
