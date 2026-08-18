@@ -90,6 +90,14 @@ Vercel's dashboard:
   solution-style root `tsconfig.json`, whose `"files": []` matches no input. The
   script runs `tsc -b`, which does.
 
+The backend needs **Node 22 or newer** — `npm start` uses
+`--env-file-if-exists`, which arrived in Node 20.12. `backend/package.json`
+declares this in `engines`, which is what Render reads to pick a version. On an
+older Node the process exits immediately with `bad option`, the deploy fails,
+and the previous instance keeps serving — so from the outside nothing appears to
+have changed. Check the Render deploy log, not the site, to tell a failed deploy
+from a successful one.
+
 **Run the migrations before the new backend serves traffic.** They are
 deliberately not run on boot — several instances booting at once would run them
 concurrently, and a slow one would block the deploy:
