@@ -53,8 +53,31 @@ INFO MongoDB đã kết nối — database "test"
 
 ## Deploying
 
-Hosting is configured outside this repo (Render's dashboard), so there is no
-deploy config here and nothing in CI deploys. CI only tests.
+Two separate hosts, and they do **not** deploy together:
+
+- **frontend** — Vercel (`chat-app-longbi.vercel.app`), root directory `frontend`
+- **backend** — Render (`chat-app-backend-tgcb.onrender.com`), configured in
+  Render's dashboard, so there is no config for it in this repo
+
+Nothing in CI deploys anything. CI only tests.
+
+**Deploy the backend before the frontend.** The backend tolerates an older
+frontend; the reverse is not true. A new frontend against an old backend loses
+realtime entirely — it emits `conversation:subscribe` and listens for
+`message:new`, neither of which an older server knows — and every endpoint added
+since returns 404.
+
+Vercel's Git integration is currently **disconnected**, because it auto-deployed
+on push while Render did not, which inverted that order and broke production.
+Re-enable it only once Render is deploying too:
+
+```bash
+vercel git connect
+```
+
+`frontend/vercel.json` then keeps `main` from deploying on push, so reconnecting
+does not by itself re-arm the trap. Remove that block when both sides really are
+meant to ship together.
 
 **Run the migrations before the new backend serves traffic.** They are
 deliberately not run on boot — several instances booting at once would run them
