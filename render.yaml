@@ -1,0 +1,52 @@
+# Render chỉ chạy BACKEND. Frontend nằm trên Vercel (xem frontend/vercel.json).
+#
+# Đây là chỗ hay sai nhất của repo này: hai package nằm trong hai thư mục con và
+# KHÔNG có package.json nào ở gốc repo. Nếu Root Directory để trống, Render build
+# ở gốc, không tìm thấy package.json nào để cài, và build fail — mà build fail thì
+# instance cũ vẫn tiếp tục phục vụ, nên nhìn từ ngoài y hệt như deploy không có
+# tác dụng gì.
+#
+# File này khai báo đúng những thiết lập đó. Với service tạo sẵn từ dashboard,
+# Render KHÔNG tự áp dụng file này — phải nối service vào Blueprint, hoặc nhập tay
+# đúng các giá trị dưới đây. Dù bằng cách nào thì đây vẫn là nguồn tham chiếu.
+
+services:
+  - type: web
+    name: chat-app-backend
+    runtime: node
+    plan: free
+
+    # Quan trọng nhất: build và chạy TRONG backend/, không phải gốc repo.
+    rootDir: backend
+
+    # Lệnh chạy tương đối với rootDir, nên KHÔNG được có `cd backend` ở đây —
+    # như vậy sẽ thành backend/backend.
+    buildCommand: npm ci
+    startCommand: npm start
+
+    # Phải là /health. Đường dẫn này công khai và trả 200; mọi đường /api khác
+    # đều qua middleware xác thực toàn cục nên trả 401, và Render sẽ coi instance
+    # là không khoẻ rồi rollback về bản cũ.
+    healthCheckPath: /health
+
+    envVars:
+      # `npm start` dùng cờ --env-file-if-exists, có từ Node 20.12.
+      - key: NODE_VERSION
+        value: "22"
+
+      # Phải là origin của frontend đã deploy, không phải localhost — nếu không
+      # CORS và kiểm tra origin của Socket.IO sẽ chặn đúng frontend thật.
+      - key: CLIENT_URL
+        value: https://chat-app-longbi.vercel.app
+
+      # Bí mật: `sync: false` để Render hỏi giá trị, không lưu vào repo.
+      - key: MONGODB_CONNECTION_STRING
+        sync: false
+      - key: ACCESS_TOKEN_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

@@ -63,6 +63,11 @@ Nothing in CI deploys anything. CI only tests.
 
 ### Render service settings
 
+`render.yaml` at the repo root declares these. Render does **not** apply it to a
+service that was created by hand in the dashboard — connect that service to the
+Blueprint, or enter the same values manually. Either way the file is the
+reference.
+
 This is a monorepo and there is **no `package.json` at the repo root** — there
 never has been. So the Root Directory must point at the package being deployed,
 exactly like Vercel's is set to `frontend`:
@@ -72,6 +77,7 @@ exactly like Vercel's is set to `frontend`:
 | Root Directory | `backend` |
 | Build Command | `npm ci` |
 | Start Command | `npm start` |
+| Health Check Path | `/health` |
 
 Leaving Root Directory empty makes the build run at the repo root, where there is
 no `package.json` to read, so it fails — and a failed deploy leaves the previous
@@ -87,6 +93,11 @@ uses `--env-file-if-exists`, which no-ops when the file is absent. `PORT` is
 provided by Render. `CLIENT_URL` must be the deployed frontend origin
 (`https://chat-app-longbi.vercel.app`), not localhost, or CORS and the Socket.IO
 origin check will reject the real frontend.
+
+Health Check Path must be `/health` if it is set at all. Every other path under
+`/api` goes through the global auth middleware and answers 401, which Render
+reads as an unhealthy instance — it then rolls back to the previous deploy, and
+the old build carries on serving.
 
 **Deploy the backend before the frontend.** The backend tolerates an older
 frontend; the reverse is not true. A new frontend against an old backend loses
