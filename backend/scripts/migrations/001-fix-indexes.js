@@ -15,8 +15,23 @@ export const description =
  */
 
 const createIndex = async (collection, keys, options = {}) => {
+  // Xem index đã có chưa TRƯỚC khi tạo, để log nói đúng sự thật.
+  //
+  // `createIndex` trên một index đã tồn tại là no-op và vẫn trả về tên, nên nếu
+  // cứ thế log "+ tạo" thì lần chạy thứ hai trông y hệt lần đầu — mà chạy lại
+  // rồi đối chiếu log chính là cách ta kiểm chứng tính idempotent.
+  //
+  // `indexes()` ném lỗi khi collection chưa tồn tại; coi như chưa có index nào.
+  const existing = new Set((await collection.indexes().catch(() => [])).map((i) => i.name));
+
   const name = await collection.createIndex(keys, options);
-  logger.info(`  + tạo index ${collection.collectionName}.${name}`);
+
+  logger.info(
+    existing.has(name)
+      ? `  · index ${collection.collectionName}.${name} đã có, bỏ qua`
+      : `  + tạo index ${collection.collectionName}.${name}`,
+  );
+
   return name;
 };
 

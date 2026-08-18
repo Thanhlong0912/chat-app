@@ -41,6 +41,16 @@ overrides that one peer specifically, so a plain `npm ci` resolves.
 `VITE_API_URL` and `VITE_SOCKET_URL` from `.env.development` and
 `.env.production`.
 
+`MONGODB_DB_NAME` is optional. If the connection URI has no database in its
+path, Mongoose silently falls back to `test` — which is where the deployed data
+actually lives. Set this to pin it explicitly; leave it empty to keep whatever
+the URI says. Either way the backend logs the database it resolved to on
+startup, so you never have to guess which one you are pointed at:
+
+```
+INFO MongoDB đã kết nối — database "test"
+```
+
 ## Deploying
 
 Hosting is configured outside this repo (Render's dashboard), so there is no
