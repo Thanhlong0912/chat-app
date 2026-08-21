@@ -124,6 +124,33 @@ describe("tin nhắn video", () => {
       expect(res.body.message.attachments[0].url).toContain("a.png");
     });
 
+    // Đường đi thật sau khi frontend lên bản mới còn backend thì chưa: client gửi
+    // KÈM cả hai, backend nào hiểu field nào thì dùng field đó.
+    it("gửi kèm cả `attachment` lẫn `imgUrl` thì `attachment` thắng", async () => {
+      const { alice, bob } = await setup();
+
+      const res = await authedAgent(alice)
+        .post("/api/messages/direct")
+        .send({
+          recipientId: String(bob._id),
+          attachment: videoAttachment({
+            kind: "image",
+            url: "https://res.cloudinary.com/demo/image/upload/v1/a.png",
+            mimeType: "image/png",
+          }),
+          imgUrl: "https://res.cloudinary.com/demo/image/upload/v1/a.png",
+        })
+        .expect(201);
+
+      expect(res.body.message.attachments).toHaveLength(1);
+      expect(res.body.message.kind).toBe("image");
+
+      // `publicId` chỉ có ở `attachment`; nếu `imgUrl` thắng thì nó biến mất và
+      // tệp lại rò rỉ trên Cloudinary như trước.
+      const saved = await Message.findById(res.body.message._id).lean();
+      expect(saved.attachments[0].publicId).toBe("moji_chat/attachments/clip");
+    });
+
     it("từ chối attachment có url không hợp lệ", async () => {
       const { alice, bob } = await setup();
 

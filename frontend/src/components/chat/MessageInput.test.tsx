@@ -287,3 +287,59 @@ describe("phát trạng thái đang nhập", () => {
     expect(emitTyping).toHaveBeenCalledWith("convo-1", false);
   });
 });
+
+/**
+ * Frontend (Vercel) và backend (Render) không lên bản mới cùng lúc, và Vercel tự
+ * deploy khi `main` đổi còn Render thì phải bấm tay — nên frontend gần như luôn
+ * đi trước.
+ *
+ * Backend cũ không biết field `attachment`, và zod strip key lạ. Gửi mỗi
+ * `attachment` thì tin nhắn chỉ có ảnh trả 400 EMPTY_MESSAGE, còn tin nhắn có cả
+ * chữ lẫn ảnh thì gửi đi MẤT ẢNH mà không báo gì. Nên vẫn phải kèm `imgUrl`.
+ */
+describe("tương thích ngược với backend chưa deploy", () => {
+  const uploadAttachment = vi.fn();
+
+  const sendFile = async (kind: "image" | "video", url: string, type: string) => {
+    uploadAttachment.mockResolvedValue({ url, kind, publicId: "pid", mimeType: type });
+
+    const { chatService } = await import("@/services/chatService");
+    vi.spyOn(chatService, "uploadAttachment").mockImplementation(uploadAttachment);
+
+    render(<MessageInput selectedConvo={conversation} />);
+
+    const input = screen.getByLabelText("Chọn ảnh hoặc video để gửi");
+    await userEvent.setup().upload(input, new File(["x"], `f.${kind}`, { type }));
+  };
+
+  it("ảnh gửi kèm cả `imgUrl` lẫn `attachment`", async () => {
+    await sendFile("image", "https://cdn.test/a.png", "image/png");
+
+    await vi.waitFor(() =>
+      expect(sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          imgUrl: "https://cdn.test/a.png",
+          attachment: expect.objectContaining({ kind: "image" }),
+        }),
+      ),
+    );
+  });
+
+  /*
+   * Video thì KHÔNG kèm `imgUrl`.
+   *
+   * Backend cũ sẽ lưu nó thành `kind: "image"` và client vẽ ra một <img> hỏng —
+   * im lặng sai còn tệ hơn báo lỗi. Backend cũ chưa từng nhận video, nên để nó
+   * từ chối là đúng.
+   */
+  it("video KHÔNG kèm `imgUrl`", async () => {
+    await sendFile("video", "https://cdn.test/c.mp4", "video/mp4");
+
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalled());
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ attachment: expect.objectContaining({ kind: "video" }) }),
+    );
+    expect(sendMessage.mock.calls[0][0]).not.toHaveProperty("imgUrl");
+  });
+});

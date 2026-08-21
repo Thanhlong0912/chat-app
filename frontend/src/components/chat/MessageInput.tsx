@@ -206,6 +206,19 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         // Cả object, không chỉ `url`: `kind` quyết định client vẽ <img> hay
         // <video>, và `publicId` là thứ server cần để dọn tệp khi xoá tin nhắn.
         attachment,
+        /*
+         * Ảnh gửi kèm `imgUrl` cũ, cho tới khi backend mới lên.
+         *
+         * Vercel tự deploy khi `main` đổi, Render phải bấm tay — nên frontend gần
+         * như luôn đi trước. Backend cũ không biết field `attachment` và zod
+         * strip key lạ: gửi mỗi `attachment` thì tin nhắn chỉ có ảnh trả 400, còn
+         * tin có cả chữ lẫn ảnh thì gửi đi MẤT ẢNH mà không báo gì.
+         *
+         * Video KHÔNG kèm: backend cũ sẽ lưu thành `kind: "image"` và client vẽ
+         * ra một <img> hỏng. Nó chưa từng nhận video, nên để nó từ chối là đúng —
+         * im lặng sai còn tệ hơn báo lỗi.
+         */
+        ...(attachment.kind === "image" ? { imgUrl: attachment.url } : {}),
         replyToMessageId: replyingTo?._id,
       });
 
