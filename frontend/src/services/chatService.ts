@@ -109,7 +109,16 @@ export const chatService = {
     name: string,
     memberIds: string[],
   ): Promise<Conversation> {
-    const res = await api.post("/conversations", { type, name, memberIds });
+    // Bỏ hẳn `name` khi rỗng thay vì gửi chuỗi rỗng. Chat 1-1 không có tên, và
+    // một `name: ""` đi kèm là thứ từng làm mọi request tạo chat 1-1 trả 400.
+    const trimmed = name.trim();
+
+    const res = await api.post("/conversations", {
+      type,
+      memberIds,
+      ...(trimmed ? { name: trimmed } : {}),
+    });
+
     return res.data.conversation;
   },
 };

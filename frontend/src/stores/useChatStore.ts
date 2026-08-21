@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
+import { toast } from "sonner";
 import { chatService } from "@/services/chatService";
 import type { ChatState, MessageThread } from "@/types/store";
 import type { Conversation, Message } from "@/types/chat";
@@ -630,7 +631,15 @@ export const useChatStore = create<ChatState>()(
 
           return conversation;
         } catch (error) {
-          set({ creating: false, error: describeError(error) });
+          const message = describeError(error);
+
+          set({ creating: false, error: message });
+
+          // `error` trong store không được render ở đâu cả, nên một thất bại ở đây
+          // trước giờ hoàn toàn im lặng: bấm vào một người bạn và không có gì xảy
+          // ra, không có cách nào biết vì sao.
+          toast.error(message);
+
           return null;
         }
       },
