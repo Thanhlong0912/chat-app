@@ -8,7 +8,7 @@ import {
   updateConversationAfterCreateMessage,
 } from "../utils/messageHelper.js";
 import { getIo } from "../socket/io.js";
-import { SERVER_EVENTS, conversationRoom } from "../socket/events.js";
+import { SERVER_EVENTS, conversationRoom, userRoom } from "../socket/events.js";
 import { loadMembership } from "./membershipService.js";
 import { ACTIONS, can } from "../domain/groupPermissions.js";
 import { destroyImage } from "../middlewares/uploadMiddleware.js";
@@ -52,7 +52,13 @@ export async function createMessage({
   const payload = {
     conversationId: conversation._id,
     senderId: sender._id,
-    kind: kind ?? (attachments?.length ? "image" : "text"),
+    /*
+     * `kind` của tin nhắn theo `kind` của tệp đính kèm đầu tiên.
+     *
+     * Bản trước cứng nhắc gán "image" cho mọi tin có đính kèm, nên một video được
+     * lưu là tin nhắn ảnh và client vẽ nó bằng thẻ <img> — ra một khung trống.
+     */
+    kind: kind ?? (attachments?.length ? (attachments[0].kind ?? "image") : "text"),
     content: content?.trim() || null,
     ...(attachments?.length ? { attachments } : {}),
     ...(replyTo ? { replyTo } : {}),
@@ -241,8 +247,12 @@ export async function deleteMessage({ messageId, actor }) {
     throw forbidden("CANNOT_DELETE_MESSAGE", "Bạn không có quyền xoá tin nhắn này");
   }
 
-  // Dọn tệp trên Cloudinary trước khi mất tham chiếu tới publicId.
-  const publicIds = (message.attachments ?? []).map((a) => a.publicId).filter(Boolean);
+  // Dọn tệp trên Cloudinary trước khi mất tham chiếu tới publicId. Giữ cả `kind`:
+  // `destroy` mặc định resource_type "image", nên không truyền "video" thì video
+  // không bao giờ bị xoá thật.
+  const assets = (message.attachments ?? [])
+    .filter((a) => a.publicId)
+    .map((a) => ({ publicId: a.publicId, resourceType: a.kind === "video" ? "video" : "image" }));
 
   message.deletedAt = new Date();
   message.deletedBy = actor._id;
@@ -250,7 +260,7 @@ export async function deleteMessage({ messageId, actor }) {
   message.attachments = undefined;
   await message.save();
 
-  await Promise.all(publicIds.map((id) => destroyImage(id)));
+  await Promise.all(assets.map((a) => destroyImage(a.publicId, a.resourceType)));
 
   // Tin nhắn cuối bị xoá thì phải tính lại phần xem trước, nếu không sidebar vẫn
   // hiển thị nội dung đã bị xoá.
@@ -301,8 +311,14 @@ export async function deleteMessage({ messageId, actor }) {
       select: "displayName avatarUrl",
     });
 
-    io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
-      conversation: serializeConversation(conversation),
+    // Từng người một, kèm `viewerId` của chính họ: một payload dùng chung sẽ
+    // null hoá `myRole` và xoá trắng `unreadCount` của mọi người nhận.
+    (conversation.participants ?? []).forEach((p) => {
+      const memberId = String(p.userId?._id ?? p.userId);
+
+      io.to(userRoom(memberId)).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+        conversation: serializeConversation(conversation, { viewerId: memberId }),
+      });
     });
   }
 

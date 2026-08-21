@@ -1,6 +1,7 @@
 import Friend from "../models/Friend.js";
 import User from "../models/User.js";
 import FriendRequest from "../models/FriendRequest.js";
+import { announcePresenceAmong } from "../socket/handlers/presence.js";
 import { badRequest, forbidden, notFound } from "../utils/errors.js";
 
 export const sendFriendRequest = async (req, res) => {
@@ -66,6 +67,15 @@ export const acceptFriendRequest = async (req, res) => {
 
   await Friend.create({ userA: request.from, userB: request.to });
   await FriendRequest.findByIdAndDelete(requestId);
+
+  /*
+   * Kết bạn làm audience của CẢ HAI thay đổi.
+   *
+   * Thiếu bước này, dấu online của người bạn mới đứng im màu xám: audience đã
+   * cache 5 phút không có họ trong đó, nên `presence:update` không bao giờ tới,
+   * và `presence:snapshot` thì chỉ được gửi một lần lúc kết nối.
+   */
+  await announcePresenceAmong([request.from, request.to]);
 
   const from = await User.findById(request.from).select("_id displayName avatarUrl").lean();
 

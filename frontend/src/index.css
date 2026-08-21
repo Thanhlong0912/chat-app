@@ -398,4 +398,33 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /*
+   * Con trỏ bàn tay cho mọi thứ bấm được.
+   *
+   * Tailwind v3 có `cursor: pointer` cho <button> trong preflight; v4 BỎ hẳn quy
+   * tắc đó và trả nút về `cursor: default` của user-agent. Cả app này gần như
+   * không chỗ nào tự thêm `cursor-pointer`, nên sau khi lên v4 mọi nút — thẻ hội
+   * thoại ở sidebar, từng người trong danh sách bạn bè, nút gửi — đều hiện mũi
+   * tên thường và đọc như thứ không bấm được. Đó là lý do danh sách bạn bè ở
+   * "gửi tin nhắn mới" trông như bị chết cứng.
+   *
+   * Đặt ở `base` nên bất kỳ class `cursor-*` nào trên component đều thắng, và
+   * `:disabled` được loại trừ để nút đang bị khoá không mời người dùng bấm.
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  label[for],
+  summary,
+  a[href] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }

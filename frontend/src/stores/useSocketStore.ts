@@ -344,10 +344,14 @@ function notifyIncoming(message: Message, conversationId: string) {
       ? (conversation.group?.name ?? "Nhóm chat")
       : (message.sender?.displayName ?? "Tin nhắn mới");
 
+  // Tin nhắn không có chữ thì mô tả theo loại tệp — "Đã gửi một ảnh" cho một
+  // video là sai, và thông báo đẩy là chỗ duy nhất người dùng thấy trước khi mở.
+  const fallback = message.kind === "video" ? "Đã gửi một video" : "Đã gửi một ảnh";
+
   const body =
     conversation?.type === "group" && message.sender?.displayName
-      ? `${message.sender.displayName}: ${message.content ?? "Đã gửi một ảnh"}`
-      : (message.content ?? "Đã gửi một ảnh");
+      ? `${message.sender.displayName}: ${message.content ?? fallback}`
+      : (message.content ?? fallback);
 
   const open = () => {
     useChatStore.getState().setActiveConversation(conversationId);

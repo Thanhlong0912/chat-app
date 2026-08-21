@@ -7,6 +7,30 @@ export const authMe = async (req, res) => {
   return res.status(200).json({ user: req.user });
 };
 
+/** Số kết quả tối đa cho một lần tìm. Đủ để chọn, đủ nhỏ để không phải phân trang. */
+const SEARCH_LIMIT = 10;
+
+/**
+ * Vô hiệu hoá các ký tự có nghĩa trong regex.
+ *
+ * Chuỗi người dùng gõ đi thẳng vào `$regex`. Không escape thì `.*` khớp tất cả
+ * mọi người, và một dấu `(` lẻ làm Mongo ném lỗi regex không hợp lệ — tức là gõ
+ * nửa chừng một cái tên có ngoặc là request 500.
+ */
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Tìm người dùng theo username hoặc tên hiển thị.
+ *
+ * Bản trước là `findOne({ username })` khớp TUYỆT ĐỐI: phải gõ đúng từng ký tự
+ * mới ra kết quả, nên thực tế chỉ dùng được khi đã biết trước username đầy đủ của
+ * người kia.
+ *
+ * Response mang cả hai hình dạng. `users` là mảng kết quả cho client mới; `user`
+ * là kết quả khớp tuyệt đối (hoặc null) mà bundle frontend đang chạy vẫn đọc.
+ * Frontend ở Vercel và backend ở Render không lên bản mới cùng lúc, nên bỏ `user`
+ * ngay sẽ làm chức năng kết bạn chết cho tới khi Vercel deploy xong.
+ */
 export const searchUserByUsername = async (req, res) => {
   const { username } = req.query;
 
@@ -17,11 +41,21 @@ export const searchUserByUsername = async (req, res) => {
     throw badRequest("USERNAME_REQUIRED", "Cần cung cấp username trong query.");
   }
 
-  const user = await User.findOne({ username: username.trim() }).select(
-    "_id displayName username avatarUrl",
-  );
+  const term = username.trim();
+  const pattern = new RegExp(escapeRegex(term), "i");
 
-  return res.status(200).json({ user });
+  const users = await User.find({
+    // Chính mình không bao giờ là kết quả hữu ích — không ai tự kết bạn với mình.
+    _id: { $ne: req.user._id },
+    $or: [{ username: pattern }, { displayName: pattern }],
+  })
+    .select("_id displayName username avatarUrl")
+    .limit(SEARCH_LIMIT)
+    .lean();
+
+  const exact = users.find((user) => user.username === term) ?? null;
+
+  return res.status(200).json({ users, user: exact });
 };
 
 /**

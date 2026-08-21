@@ -414,7 +414,8 @@
         "tags": [
           "Users"
         ],
-        "summary": "Tìm người dùng theo username",
+        "summary": "Tìm người dùng theo username hoặc tên hiển thị",
+        "description": "Khớp MỘT PHẦN, không phân biệt hoa thường, tối đa 10 kết quả, loại chính người đang gọi. Bản trước khớp username tuyệt đối nên phải gõ đúng từng ký tự mới ra kết quả. `user` là trường tương thích ngược: kết quả khớp tuyệt đối, hoặc null.",
         "parameters": [
           {
             "name": "username",
@@ -422,30 +423,39 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Từ khoá, một ký tự là đủ"
           }
         ],
         "responses": {
           "200": {
-            "description": "Người dùng tìm được",
+            "description": "Danh sách người dùng khớp",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/User"
+                      }
+                    },
                     "user": {
-                      "$ref": "#/components/schemas/User"
+                      "$ref": "#/components/schemas/User",
+                      "nullable": true,
+                      "description": "@deprecated — khớp tuyệt đối, dùng `users`"
                     }
                   }
                 }
               }
             }
           },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
           }
         }
       }
@@ -1159,8 +1169,8 @@
         "tags": [
           "Messages"
         ],
-        "summary": "Tải tệp đính kèm lên",
-        "description": "Tách khỏi việc gửi tin nhắn: tải lên trước, rồi gửi một tin nhắn tham chiếu descriptor trả về. Nhờ vậy tiến trình tải và việc thử lại độc lập với việc gửi.",
+        "summary": "Tải tệp đính kèm lên (ảnh hoặc video)",
+        "description": "Tách khỏi việc gửi tin nhắn: tải lên trước, rồi gửi một tin nhắn tham chiếu descriptor trả về. Nhờ vậy tiến trình tải và việc thử lại độc lập với việc gửi. Nhận `image/png|jpeg|webp|gif|avif` (tối đa 8 MB) và `video/mp4|webm|quicktime` (tối đa 25 MB).",
         "parameters": [
           {
             "name": "conversationId",
@@ -1225,7 +1235,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "413": {
-            "description": "Tệp quá lớn (giới hạn 8 MB)",
+            "description": "Tệp quá lớn — ảnh tối đa 8 MB, video tối đa 25 MB",
             "content": {
               "application/json": {
                 "schema": {
@@ -1803,9 +1813,14 @@
                   "replyToMessageId": {
                     "type": "string"
                   },
+                  "attachment": {
+                    "$ref": "#/components/schemas/AttachmentInput"
+                  },
                   "imgUrl": {
                     "type": "string",
-                    "format": "uri"
+                    "format": "uri",
+                    "deprecated": true,
+                    "description": "@deprecated — dùng `attachment`. URL trần làm mất `kind` và `publicId`."
                   }
                 }
               }
@@ -1877,9 +1892,14 @@
                   "replyToMessageId": {
                     "type": "string"
                   },
+                  "attachment": {
+                    "$ref": "#/components/schemas/AttachmentInput"
+                  },
                   "imgUrl": {
                     "type": "string",
-                    "format": "uri"
+                    "format": "uri",
+                    "deprecated": true,
+                    "description": "@deprecated — dùng `attachment`. URL trần làm mất `kind` và `publicId`."
                   }
                 }
               }
@@ -2431,6 +2451,7 @@
             "type": "string",
             "enum": [
               "image",
+              "video",
               "file"
             ]
           },
@@ -2450,9 +2471,58 @@
             "type": "integer",
             "nullable": true
           },
+          "duration": {
+            "type": "number",
+            "nullable": true,
+            "description": "Giây, chỉ video mới có"
+          },
           "originalName": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "AttachmentInput": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "description": "Gửi lại nguyên descriptor nhận được từ `POST /conversations/{conversationId}/attachments`. `publicId` phải được giữ lại, nếu không server không dọn được tệp trên Cloudinary khi tin nhắn bị xoá.",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Chỉ http/https"
+          },
+          "publicId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video",
+              "file"
+            ],
+            "default": "image"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "duration": {
+            "type": "number"
+          },
+          "originalName": {
+            "type": "string"
           }
         }
       },

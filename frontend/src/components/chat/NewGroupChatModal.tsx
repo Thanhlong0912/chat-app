@@ -133,12 +133,24 @@ const NewGroupChatModal = () => {
               className="flex-1"
             />
 
-            {/* danh sách gợi ý */}
-            {search && filteredFriends.length > 0 && (
+            {/*
+              Danh sách hiện NGAY, không đợi gõ chữ.
+
+              Trước đây điều kiện là `search && ...`, nên khi mở hộp thoại chỉ có
+              một ô nhập trống: không có gì cho thấy là có bạn bè để chọn, và
+              không thể biết phải gõ mới thấy.
+            */}
+            {filteredFriends.length > 0 && (
               <IniviteSuggestionList
                 filteredFriends={filteredFriends}
                 onSelect={handleSelectFriend}
               />
+            )}
+
+            {search && filteredFriends.length === 0 && (
+              <p className="py-2 text-sm text-muted-foreground">
+                Không tìm thấy bạn bè nào phù hợp.
+              </p>
             )}
 
             {/* danh sách user đã chọn */}

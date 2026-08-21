@@ -10,6 +10,19 @@ const IMAGE_MIME_TYPES = new Set([
   "image/avif",
 ]);
 
+const VIDEO_MIME_TYPES = new Set([
+  "video/mp4",
+  "video/webm",
+  // Cái iPhone quay ra.
+  "video/quicktime",
+]);
+
+export const isVideoMimeType = (mimeType) => VIDEO_MIME_TYPES.has(mimeType);
+
+/** Trần riêng cho ảnh. Video được phép lớn hơn — xem `MAX_VIDEO_BYTES`. */
+export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
+
 /**
  * Chỉ nhận ảnh.
  *
@@ -25,6 +38,15 @@ const imageOnly = (req, file, cb) => {
   cb(badRequest("UNSUPPORTED_FILE_TYPE", `Định dạng không được hỗ trợ: ${file.mimetype}`));
 };
 
+/** Ảnh hoặc video. Cùng lập luận như `imageOnly` về độ tin cậy của mimetype. */
+const imageOrVideo = (req, file, cb) => {
+  if (IMAGE_MIME_TYPES.has(file.mimetype) || VIDEO_MIME_TYPES.has(file.mimetype)) {
+    return cb(null, true);
+  }
+
+  cb(badRequest("UNSUPPORTED_FILE_TYPE", `Định dạng không được hỗ trợ: ${file.mimetype}`));
+};
+
 /** Avatar: nhỏ, luôn crop vuông. */
 export const uploadAvatar = multer({
   storage: multer.memoryStorage(),
@@ -32,11 +54,16 @@ export const uploadAvatar = multer({
   fileFilter: imageOnly,
 });
 
-/** Ảnh gửi trong tin nhắn: cho phép lớn hơn avatar. */
+/**
+ * Tệp gửi trong tin nhắn: ảnh hoặc video.
+ *
+ * `limits.fileSize` chỉ nhận MỘT con số, nên đặt theo mức cao hơn (video) và
+ * trần riêng của ảnh được kiểm trong controller, nơi đã biết mimetype thật.
+ */
 export const uploadAttachment = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
-  fileFilter: imageOnly,
+  limits: { fileSize: MAX_VIDEO_BYTES, files: 1 },
+  fileFilter: imageOrVideo,
 });
 
 /**
@@ -74,13 +101,19 @@ export const uploadImageFromBuffer = (buffer, options) => {
   });
 };
 
-/** Xoá asset theo public_id. Bỏ qua lỗi — đây là dọn dẹp, không phải thao tác chính. */
-export const destroyImage = async (publicId) => {
+/**
+ * Xoá asset theo public_id. Bỏ qua lỗi — đây là dọn dẹp, không phải thao tác chính.
+ *
+ * `resourceType` là bắt buộc với video: `destroy` mặc định `resource_type: "image"`
+ * và sẽ báo "not found" cho một public_id thuộc video, tức là tệp nằm lại nguyên
+ * trên Cloudinary mà không có dấu hiệu gì.
+ */
+export const destroyImage = async (publicId, resourceType = "image") => {
   if (!publicId) return;
 
   try {
-    await cloudinary.uploader.destroy(publicId);
+    await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
   } catch {
-    // Ảnh mồ côi trên Cloudinary không đáng để làm fail request của người dùng.
+    // Tệp mồ côi trên Cloudinary không đáng để làm fail request của người dùng.
   }
 };

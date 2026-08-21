@@ -80,7 +80,8 @@ const AddMembersDialog = ({ conversation }: { conversation: Conversation }) => {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          {search && candidates.length > 0 && (
+          {/* Hiện ngay khi mở, không đợi gõ — xem ghi chú ở NewGroupChatModal. */}
+          {candidates.length > 0 && (
             <IniviteSuggestionList
               filteredFriends={candidates}
               onSelect={(friend) => {
@@ -90,9 +91,11 @@ const AddMembersDialog = ({ conversation }: { conversation: Conversation }) => {
             />
           )}
 
-          {search && candidates.length === 0 && (
+          {candidates.length === 0 && (
             <p className="py-2 text-sm text-muted-foreground">
-              Không tìm thấy bạn bè nào phù hợp.
+              {search
+                ? "Không tìm thấy bạn bè nào phù hợp."
+                : "Tất cả bạn bè của bạn đã ở trong nhóm này."}
             </p>
           )}
 
