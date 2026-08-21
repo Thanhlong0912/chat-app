@@ -107,8 +107,6 @@ export const useAuthStore = create<AuthState>()(
             await fetchMe();
           }
         } catch (error) {
-          console.error(error);
-
           /*
            * Không có cookie nào cả nghĩa là chưa từng có phiên để mà hết hạn.
            *
@@ -120,12 +118,18 @@ export const useAuthStore = create<AuthState>()(
            * Các mã còn lại (REFRESH_TOKEN_INVALID/_EXPIRED/_REUSED) là phiên thật
            * sự kết thúc. Lỗi mạng thì không có mã nào để đọc — im lặng ở đó sẽ giấu
            * mất lỗi thật, nên mặc định vẫn là báo.
+           *
+           * console.error cũng nằm trong nhánh này: đổ một AxiosError ra console
+           * mỗi lần có khách mới ghé nghĩa là console production luôn sẵn một "lỗi"
+           * đỏ chẳng liên quan gì tới lỗi thật. (Dòng "Failed to load resource: 401"
+           * của trình duyệt thì vẫn còn — log tầng mạng, JS không tắt được.)
            */
           const noSessionToExpire =
             axios.isAxiosError<{ code?: string }>(error) &&
             error.response?.data?.code === "NO_REFRESH_TOKEN";
 
           if (!noSessionToExpire) {
+            console.error(error);
             toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
           }
 
