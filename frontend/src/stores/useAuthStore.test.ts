@@ -15,8 +15,12 @@ const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
 afterAll(() => server.close());
 
+let consoleError: ReturnType<typeof vi.spyOn>;
+
 beforeEach(() => {
   vi.mocked(toast.error).mockClear();
+  // Nuốt log trong lúc test, nhưng vẫn đếm được số lần gọi.
+  consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   useAuthStore.setState({ accessToken: null, user: null, loading: false });
 });
 
@@ -40,6 +44,26 @@ describe("useAuthStore.refresh — khách chưa từng đăng nhập", () => {
     await useAuthStore.getState().refresh();
 
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  /*
+   * console.error cũng là một cách báo lỗi, chỉ là báo cho lập trình viên. Đổ một
+   * AxiosError ra console mỗi lần có khách mới ghé nghĩa là console production
+   * luôn có sẵn "lỗi" đỏ không liên quan gì tới lỗi thật.
+   *
+   * Dòng "Failed to load resource: 401" của trình duyệt thì vẫn còn — đó là log
+   * tầng mạng, JS không tắt được.
+   */
+  it("không đổ lỗi ra console khi hoàn toàn không có refresh token", async () => {
+    server.use(
+      http.post(`${API}/auth/refresh`, () =>
+        HttpResponse.json({ code: "NO_REFRESH_TOKEN" }, { status: 401 }),
+      ),
+    );
+
+    await useAuthStore.getState().refresh();
+
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   it("vẫn dọn sạch state khi không có refresh token", async () => {
@@ -73,6 +97,7 @@ describe("useAuthStore.refresh — phiên thật sự kết thúc", () => {
     expect(toast.error).toHaveBeenCalledWith(
       "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!",
     );
+    expect(consoleError).toHaveBeenCalled();
   });
 
   // Mất mạng thì không có response nào để đọc mã. Im lặng ở đây sẽ giấu mất lỗi
