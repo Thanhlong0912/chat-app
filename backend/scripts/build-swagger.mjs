@@ -258,13 +258,38 @@ const spec = {
     "/users/search": {
       get: {
         tags: ["Users"],
-        summary: "Tìm người dùng theo username",
+        summary: "Tìm người dùng theo username hoặc tên hiển thị",
+        description: [
+          "Khớp MỘT PHẦN, không phân biệt hoa thường, tối đa 10 kết quả, loại chính",
+          "người đang gọi. Bản trước khớp username tuyệt đối nên phải gõ đúng từng ký",
+          "tự mới ra kết quả.",
+          "`user` là trường tương thích ngược: kết quả khớp tuyệt đối, hoặc null.",
+        ].join(" "),
         parameters: [
-          { name: "username", in: "query", required: true, schema: { type: "string" } },
+          {
+            name: "username",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+            description: "Từ khoá, một ký tự là đủ",
+          },
         ],
         responses: {
-          200: { description: "Người dùng tìm được", ...json({ type: "object", properties: { user: ref("User") } }) },
-          404: errRef("NotFound"),
+          200: {
+            description: "Danh sách người dùng khớp",
+            ...json({
+              type: "object",
+              properties: {
+                users: { type: "array", items: ref("User") },
+                user: {
+                  ...ref("User"),
+                  nullable: true,
+                  description: "@deprecated — khớp tuyệt đối, dùng `users`",
+                },
+              },
+            }),
+          },
+          ...validated,
           ...authed,
         },
       },
@@ -554,10 +579,12 @@ const spec = {
     "/conversations/{conversationId}/attachments": {
       post: {
         tags: ["Messages"],
-        summary: "Tải tệp đính kèm lên",
+        summary: "Tải tệp đính kèm lên (ảnh hoặc video)",
         description: [
           "Tách khỏi việc gửi tin nhắn: tải lên trước, rồi gửi một tin nhắn tham chiếu",
           "descriptor trả về. Nhờ vậy tiến trình tải và việc thử lại độc lập với việc gửi.",
+          "Nhận `image/png|jpeg|webp|gif|avif` (tối đa 8 MB) và",
+          "`video/mp4|webm|quicktime` (tối đa 25 MB).",
         ].join(" "),
         parameters: [conversationId],
         requestBody: {
@@ -574,7 +601,7 @@ const spec = {
             ...json({ type: "object", properties: { attachment: ref("UploadedAttachment") } }),
           },
           400: { description: "Sai định dạng tệp", ...json(ref("Error")) },
-          413: { description: "Tệp quá lớn (giới hạn 8 MB)", ...json(ref("Error")) },
+          413: { description: "Tệp quá lớn — ảnh tối đa 8 MB, video tối đa 25 MB", ...json(ref("Error")) },
           ...member,
         },
       },
@@ -763,7 +790,13 @@ const spec = {
             content: { type: "string", maxLength: 4000 },
             clientMessageId: { type: "string", maxLength: 64 },
             replyToMessageId: { type: "string" },
-            imgUrl: { type: "string", format: "uri" },
+            attachment: ref("AttachmentInput"),
+            imgUrl: {
+              type: "string",
+              format: "uri",
+              deprecated: true,
+              description: "@deprecated — dùng `attachment`. URL trần làm mất `kind` và `publicId`.",
+            },
           },
         }),
         responses: {
@@ -787,7 +820,13 @@ const spec = {
             content: { type: "string", maxLength: 4000 },
             clientMessageId: { type: "string", maxLength: 64 },
             replyToMessageId: { type: "string" },
-            imgUrl: { type: "string", format: "uri" },
+            attachment: ref("AttachmentInput"),
+            imgUrl: {
+              type: "string",
+              format: "uri",
+              deprecated: true,
+              description: "@deprecated — dùng `attachment`. URL trần làm mất `kind` và `publicId`.",
+            },
           },
         }),
         responses: {
@@ -1021,12 +1060,39 @@ const spec = {
         description: "`publicId` cố tình không trả ra — đó là chi tiết nội bộ của Cloudinary.",
         properties: {
           url: { type: "string" },
-          kind: { type: "string", enum: ["image", "file"] },
+          kind: { type: "string", enum: ["image", "video", "file"] },
           mimeType: { type: "string", nullable: true },
           bytes: { type: "integer", nullable: true },
           width: { type: "integer", nullable: true },
           height: { type: "integer", nullable: true },
+          duration: { type: "number", nullable: true, description: "Giây, chỉ video mới có" },
           originalName: { type: "string", nullable: true },
+        },
+      },
+
+      /**
+       * Tệp đính kèm khi GỬI tin nhắn — client trả lại nguyên descriptor mà
+       * endpoint tải lên đã cấp, kèm `publicId`.
+       */
+      AttachmentInput: {
+        type: "object",
+        required: ["url"],
+        description: [
+          "Gửi lại nguyên descriptor nhận được từ",
+          "`POST /conversations/{conversationId}/attachments`.",
+          "`publicId` phải được giữ lại, nếu không server không dọn được tệp trên",
+          "Cloudinary khi tin nhắn bị xoá.",
+        ].join(" "),
+        properties: {
+          url: { type: "string", format: "uri", description: "Chỉ http/https" },
+          publicId: { type: "string" },
+          kind: { type: "string", enum: ["image", "video", "file"], default: "image" },
+          mimeType: { type: "string" },
+          bytes: { type: "integer" },
+          width: { type: "integer" },
+          height: { type: "integer" },
+          duration: { type: "number" },
+          originalName: { type: "string" },
         },
       },
 
