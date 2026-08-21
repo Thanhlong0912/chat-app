@@ -53,7 +53,24 @@ const recordSystemEvent = async (conversation, { type, actorId, targetIds = [], 
   return message;
 };
 
-/** Phát conversation:updated + tin nhắn hệ thống cho cả room. */
+/** Id của mọi thành viên, dạng string, dù đã populate hay chưa. */
+const participantIds = (conversation) =>
+  (conversation.participants ?? []).map((p) => String(p.userId?._id ?? p.userId));
+
+/**
+ * Phát conversation:updated + tin nhắn hệ thống.
+ *
+ * `conversation:updated` đi tới TỪNG người một, serialize theo góc nhìn của chính
+ * họ. Bản trước phát một payload duy nhất cho cả room, serialize không kèm
+ * `viewerId` — mà thiếu `viewerId` thì serializer trả `myRole: null`,
+ * `unreadCount: 0`, `pinned: false`. Client `upsertConversation` thay nguyên
+ * object, nên chỉ một thao tác nhóm bất kỳ là mọi thành viên (kể cả chủ nhóm) mất
+ * sạch vai trò và số chưa đọc cho tới khi tải lại trang — và menu "..." trên tin
+ * nhắn nhóm, vốn đọc `myRole`, rỗng ruột theo.
+ *
+ * Tin nhắn hệ thống thì vẫn phát cho cả room: payload của nó không có field nào
+ * phụ thuộc người xem.
+ */
 const broadcast = async (conversation, systemMessage) => {
   const io = getIo();
   if (!io) return;
@@ -62,8 +79,10 @@ const broadcast = async (conversation, systemMessage) => {
 
   const room = conversationRoom(conversation._id);
 
-  io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
-    conversation: serializeConversation(conversation),
+  participantIds(conversation).forEach((memberId) => {
+    io.to(userRoom(memberId)).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+      conversation: serializeConversation(conversation, { viewerId: memberId }),
+    });
   });
 
   if (systemMessage) {

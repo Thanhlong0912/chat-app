@@ -8,7 +8,7 @@ import {
   updateConversationAfterCreateMessage,
 } from "../utils/messageHelper.js";
 import { getIo } from "../socket/io.js";
-import { SERVER_EVENTS, conversationRoom } from "../socket/events.js";
+import { SERVER_EVENTS, conversationRoom, userRoom } from "../socket/events.js";
 import { loadMembership } from "./membershipService.js";
 import { ACTIONS, can } from "../domain/groupPermissions.js";
 import { destroyImage } from "../middlewares/uploadMiddleware.js";
@@ -301,8 +301,14 @@ export async function deleteMessage({ messageId, actor }) {
       select: "displayName avatarUrl",
     });
 
-    io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
-      conversation: serializeConversation(conversation),
+    // Từng người một, kèm `viewerId` của chính họ: một payload dùng chung sẽ
+    // null hoá `myRole` và xoá trắng `unreadCount` của mọi người nhận.
+    (conversation.participants ?? []).forEach((p) => {
+      const memberId = String(p.userId?._id ?? p.userId);
+
+      io.to(userRoom(memberId)).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+        conversation: serializeConversation(conversation, { viewerId: memberId }),
+      });
     });
   }
 
