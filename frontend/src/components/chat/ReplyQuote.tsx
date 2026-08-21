@@ -55,7 +55,11 @@ const ReplyQuote = ({
       <span className="line-clamp-2 opacity-90">
         {replyTo.contentSnapshot ?? (
           <span className="italic">
-            {replyTo.kindSnapshot === "image" ? "Hình ảnh" : "Tin nhắn đã bị xoá"}
+            {replyTo.kindSnapshot === "image"
+              ? "Hình ảnh"
+              : replyTo.kindSnapshot === "video"
+                ? "Video"
+                : "Tin nhắn đã bị xoá"}
           </span>
         )}
       </span>

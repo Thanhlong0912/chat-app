@@ -1,6 +1,34 @@
 import { z } from "zod";
 import { messageContent, objectId } from "./common.js";
 
+/** Chỉ cho phép http(s): `z.string().url()` chấp nhận cả `javascript:` và `data:`. */
+const mediaUrl = z
+  .string()
+  .url()
+  .refine((value) => /^https?:\/\//i.test(value), "URL phải là http hoặc https");
+
+/**
+ * Tệp đính kèm, đầy đủ metadata.
+ *
+ * Thay cho `imgUrl` — một chuỗi URL trần làm mất `kind` (nên video bị lưu thành
+ * ảnh) và mất `publicId` (nên `deleteMessage` không có gì để dọn trên Cloudinary,
+ * và mọi tệp đính kèm nằm lại vĩnh viễn sau khi xoá tin nhắn).
+ *
+ * Các số đo đến từ phản hồi của Cloudinary chứ không phải người dùng gõ vào; vẫn
+ * `.optional()` vì Cloudinary không trả đủ mọi field cho mọi loại tệp.
+ */
+const attachmentInput = z.object({
+  url: mediaUrl,
+  publicId: z.string().max(255).optional(),
+  mimeType: z.string().max(100).optional(),
+  bytes: z.number().int().nonnegative().optional(),
+  width: z.number().int().nonnegative().optional(),
+  height: z.number().int().nonnegative().optional(),
+  duration: z.number().nonnegative().optional(),
+  originalName: z.string().max(255).optional(),
+  kind: z.enum(["image", "video", "file"]).default("image"),
+});
+
 /** Trường dùng chung cho mọi đường gửi tin (HTTP và socket). */
 const sendFields = {
   // Không bắt buộc: tin nhắn chỉ có ảnh thì không có nội dung. Kiểm tra
@@ -8,7 +36,24 @@ const sendFields = {
   content: messageContent.optional(),
   clientMessageId: z.string().min(1).max(64).optional(),
   replyToMessageId: objectId.optional(),
-  imgUrl: z.string().url().optional(),
+  attachment: attachmentInput.optional(),
+  /**
+   * @deprecated dùng `attachment`.
+   * Giữ lại cho bundle frontend đang mở tab — frontend ở Vercel và backend ở
+   * Render không lên bản mới cùng lúc.
+   */
+  imgUrl: mediaUrl.optional(),
+};
+
+/**
+ * Chuẩn hoá hai đường vào thành một mảng attachments.
+ *
+ * Một chỗ duy nhất, dùng chung cho cả HTTP lẫn socket, nên không thể lệch nhau.
+ */
+export const toAttachments = ({ attachment, imgUrl }) => {
+  if (attachment) return [attachment];
+  if (imgUrl) return [{ url: imgUrl, kind: "image" }];
+  return undefined;
 };
 
 export const sendDirectMessageSchema = {

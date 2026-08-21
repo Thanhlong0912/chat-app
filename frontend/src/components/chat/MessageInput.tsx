@@ -16,6 +16,22 @@ const TYPING_IDLE_MS = 2500;
 
 const MAX_ROWS_PX = 160;
 
+/** Khớp với trần phía server (`uploadMiddleware.js`). */
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
+
+/** Danh sách này phải khớp với fileFilter của server, nếu không chọn xong mới báo lỗi. */
+const ACCEPTED_FILE_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+].join(",");
+
 const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const conversationId = selectedConvo._id;
 
@@ -161,12 +177,24 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   };
 
   /**
-   * Tải ảnh lên rồi gửi tin nhắn tham chiếu tới nó.
+   * Tải tệp lên rồi gửi tin nhắn tham chiếu tới nó.
    *
    * Hai bước tách rời: nếu tải thất bại, nội dung đang gõ vẫn còn nguyên trong ô
    * soạn thảo thay vì biến mất cùng lần gửi hỏng.
    */
   const uploadAndSend = async (file: File) => {
+    // Chặn sớm ở client cho phản hồi tức thì; server vẫn là nơi ép giới hạn thật.
+    const limit = file.type.startsWith("video/") ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+
+    if (file.size > limit) {
+      toast.error(
+        `${file.type.startsWith("video/") ? "Video" : "Ảnh"} tối đa ${Math.round(
+          limit / (1024 * 1024),
+        )}MB`,
+      );
+      return;
+    }
+
     setUploading(true);
 
     try {
@@ -175,7 +203,22 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
       await sendMessage({
         conversationId,
         content: draft.trim() || undefined,
-        imgUrl: attachment.url,
+        // Cả object, không chỉ `url`: `kind` quyết định client vẽ <img> hay
+        // <video>, và `publicId` là thứ server cần để dọn tệp khi xoá tin nhắn.
+        attachment,
+        /*
+         * Ảnh gửi kèm `imgUrl` cũ, cho tới khi backend mới lên.
+         *
+         * Vercel tự deploy khi `main` đổi, Render phải bấm tay — nên frontend gần
+         * như luôn đi trước. Backend cũ không biết field `attachment` và zod
+         * strip key lạ: gửi mỗi `attachment` thì tin nhắn chỉ có ảnh trả 400, còn
+         * tin có cả chữ lẫn ảnh thì gửi đi MẤT ẢNH mà không báo gì.
+         *
+         * Video KHÔNG kèm: backend cũ sẽ lưu thành `kind: "image"` và client vẽ
+         * ra một <img> hỏng. Nó chưa từng nhận video, nên để nó từ chối là đúng —
+         * im lặng sai còn tệ hơn báo lỗi.
+         */
+        ...(attachment.kind === "image" ? { imgUrl: attachment.url } : {}),
         replyToMessageId: replyingTo?._id,
       });
 
@@ -195,9 +238,11 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     event.target.value = "";
   };
 
-  /** Dán ảnh trực tiếp từ clipboard. */
+  /** Dán ảnh hoặc video trực tiếp từ clipboard. */
   const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const file = [...event.clipboardData.files].find((f) => f.type.startsWith("image/"));
+    const file = [...event.clipboardData.files].find(
+      (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
+    );
 
     if (file) {
       event.preventDefault();
@@ -221,7 +266,8 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
               {editingMessage ? "Đang chỉnh sửa" : "Đang trả lời"}
             </p>
             <p className="truncate text-xs text-muted-foreground">
-              {(editingMessage ?? replyingTo)?.content ?? "Hình ảnh"}
+              {(editingMessage ?? replyingTo)?.content ??
+                ((editingMessage ?? replyingTo)?.kind === "video" ? "Video" : "Hình ảnh")}
             </p>
           </div>
 
@@ -244,7 +290,8 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           className="transition-smooth shrink-0 hover:bg-primary/10"
           onClick={() => fileRef.current?.click()}
           disabled={uploading || Boolean(editingId)}
-          aria-label="Gửi ảnh"
+          aria-label="Gửi ảnh hoặc video"
+          title="Gửi ảnh hoặc video"
         >
           {uploading ? (
             <Spinner />
@@ -256,10 +303,10 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         <input
           ref={fileRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept={ACCEPTED_FILE_TYPES}
           className="hidden"
           onChange={handleFile}
-          aria-label="Chọn ảnh để gửi"
+          aria-label="Chọn ảnh hoặc video để gửi"
         />
 
         <div className="relative flex-1">

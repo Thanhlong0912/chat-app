@@ -9,7 +9,8 @@ import {
   setAway,
   statusesFor,
 } from "../presence.js";
-import { getAudience } from "../../services/audienceService.js";
+import { getAudience, invalidateAudience } from "../../services/audienceService.js";
+import { getIo } from "../io.js";
 import logger from "../../utils/logger.js";
 
 /**
@@ -59,6 +60,66 @@ const broadcastStatus = async (io, userId, status) => {
 
   io.to(audience.map(userRoom)).emit(SERVER_EVENTS.PRESENCE_UPDATE, payload);
 };
+
+/**
+ * Hai người vừa có quan hệ với nhau — cho mỗi bên biết trạng thái của bên kia NGAY.
+ *
+ * Vì sao cần: presence chỉ được phát tới "audience" của một người, và audience
+ * được cache 5 phút (`audienceService`). Trước đây cache đó chỉ bị xoá từ
+ * groupService, không từ luồng kết bạn hay tạo conversation — nên hai người vừa
+ * kết bạn không nằm trong audience đã cache của nhau và không ai nhận được
+ * `presence:update` của ai. `presence:snapshot` cũng chỉ gửi đúng một lần lúc kết
+ * nối, nên người bạn mới không có trong ảnh chụp: dấu online đứng im màu xám cho
+ * tới khi cả hai tải lại trang VÀ cache hết hạn.
+ *
+ * Hàm này làm hai việc: xoá cache audience của tất cả những người liên quan, rồi
+ * gửi cho mỗi người trạng thái hiện tại của những người còn lại.
+ *
+ * `lastSeenAt` được tra thật cho những ai đang offline — client dùng nó để hiện
+ * "hoạt động 5 phút trước", và một giá trị bịa sẽ hiện sai.
+ */
+export async function announcePresenceAmong(userIds) {
+  const ids = [...new Set((userIds ?? []).map(String))];
+
+  // Xoá cache kể cả khi chưa có io (ví dụ trong test HTTP thuần): lần kết nối sau
+  // vẫn phải tính lại audience.
+  ids.forEach((id) => invalidateAudience(id, ids));
+
+  const io = getIo();
+  if (!io || ids.length < 2) return;
+
+  const statuses = new Map(ids.map((id) => [id, getStatus(id)]));
+  const offline = ids.filter((id) => statuses.get(id) === STATUS.OFFLINE);
+
+  const lastSeen = new Map();
+
+  if (offline.length > 0) {
+    try {
+      const users = await User.find({ _id: { $in: offline } })
+        .select("lastSeenAt")
+        .lean();
+
+      users.forEach((user) => lastSeen.set(String(user._id), user.lastSeenAt ?? null));
+    } catch (error) {
+      // Không tra được `lastSeenAt` thì vẫn phải báo online/offline.
+      logger.warn("Không đọc được lastSeenAt khi thông báo presence", error);
+    }
+  }
+
+  ids.forEach((viewer) => {
+    ids.forEach((about) => {
+      if (viewer === about) return;
+
+      const status = statuses.get(about);
+
+      io.to(userRoom(viewer)).emit(SERVER_EVENTS.PRESENCE_UPDATE, {
+        userId: about,
+        status,
+        lastSeenAt: status === STATUS.OFFLINE ? (lastSeen.get(about) ?? null) : null,
+      });
+    });
+  });
+}
 
 export function registerPresenceHandlers(io, socket) {
   const userId = String(socket.user._id);

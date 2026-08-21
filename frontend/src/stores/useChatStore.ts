@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
+import { toast } from "sonner";
 import { chatService } from "@/services/chatService";
 import type { ChatState, MessageThread } from "@/types/store";
-import type { Conversation, Message } from "@/types/chat";
+import type { Attachment, Conversation, Message } from "@/types/chat";
 import { describeError } from "@/lib/errors";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
@@ -242,14 +243,23 @@ export const useChatStore = create<ChatState>()(
         // và để retry idempotent — server coi lần gửi lại cùng id là cùng một tin.
         const clientMessageId = input.clientMessageId ?? crypto.randomUUID();
 
+        // `attachment` là đường chính; `imgUrl` chỉ còn để tương thích ngược.
+        const optimisticAttachments: Attachment[] = input.attachment
+          ? [input.attachment]
+          : input.imgUrl
+            ? [{ url: input.imgUrl, kind: "image" }]
+            : [];
+
         const optimistic: Message = {
           _id: `tmp:${clientMessageId}`,
           conversationId: input.conversationId,
           senderId: me._id,
           sender: { _id: me._id, displayName: me.displayName, avatarUrl: me.avatarUrl },
-          kind: input.imgUrl ? "image" : "text",
+          // Bản lạc quan phải mang đúng `kind` của tệp, nếu không một video vừa
+          // gửi hiện ra là <img> hỏng cho tới khi server trả về bản thật.
+          kind: optimisticAttachments[0]?.kind ?? "text",
           content: input.content ?? null,
-          attachments: input.imgUrl ? [{ url: input.imgUrl, kind: "image" }] : [],
+          attachments: optimisticAttachments,
           replyTo: null,
           createdAt: new Date().toISOString(),
           editedAt: null,
@@ -630,7 +640,15 @@ export const useChatStore = create<ChatState>()(
 
           return conversation;
         } catch (error) {
-          set({ creating: false, error: describeError(error) });
+          const message = describeError(error);
+
+          set({ creating: false, error: message });
+
+          // `error` trong store không được render ở đâu cả, nên một thất bại ở đây
+          // trước giờ hoàn toàn im lặng: bấm vào một người bạn và không có gì xảy
+          // ra, không có cách nào biết vì sao.
+          toast.error(message);
+
           return null;
         }
       },

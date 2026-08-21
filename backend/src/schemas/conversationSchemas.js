@@ -7,7 +7,19 @@ export const createConversationSchema = {
   body: z
     .object({
       type: z.enum(["direct", "group"]),
-      name: z.string().trim().min(1).max(100).optional(),
+      /*
+       * Cố tình KHÔNG có `.min(1)`.
+       *
+       * `.optional()` chỉ cho phép `undefined`, không cho phép chuỗi rỗng — mà
+       * form tạo chat 1-1 không có ô tên nhóm nào để điền nên nó gửi `name: ""`.
+       * Với `.min(1)` thì MỌI lần bấm vào một người bạn trong "gửi tin nhắn mới"
+       * đều trả 400, store nuốt lỗi thành `null`, và giao diện đứng im như thể cú
+       * bấm không được ghi nhận.
+       *
+       * Ràng buộc "nhóm phải có tên" không mất đi: `.trim()` biến chuỗi toàn
+       * khoảng trắng thành `""`, và refine bên dưới bắt đúng trường hợp đó.
+       */
+      name: z.string().trim().max(100).optional(),
       // Loại trùng lặp ngay ở tầng validate: participants trùng nhau sẽ làm
       // unreadCounts và số thành viên sai lệch.
       memberIds: z

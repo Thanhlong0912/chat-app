@@ -95,6 +95,21 @@ const MessageActions = ({
               </DropdownMenuItem>
             )}
 
+            {/*
+              Trả lời cũng nằm trong menu, không chỉ ở nút riêng bên ngoài.
+
+              Đây là mục DUY NHẤT luôn có mặt. Trước đây cả ba mục đều có điều
+              kiện, nên một tin nhắn chỉ có ảnh của người khác (không `content`,
+              không sửa được, không xoá được nếu mình không phải quản trị) mở ra
+              một menu rỗng hoàn toàn — trông y như nút "..." bị hỏng.
+            */}
+            <DropdownMenuItem
+              onClick={() => useChatStore.getState().setReplyingTo(conversation._id, message)}
+            >
+              <Reply className="size-4" />
+              Trả lời
+            </DropdownMenuItem>
+
             {canEdit && (
               <DropdownMenuItem
                 onClick={() =>

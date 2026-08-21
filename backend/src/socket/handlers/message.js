@@ -9,6 +9,7 @@ import {
   socketDeleteMessageSchema,
   socketEditMessageSchema,
   socketSendMessageSchema,
+  toAttachments,
 } from "../../schemas/messageSchemas.js";
 import { badRequest } from "../../utils/errors.js";
 
@@ -35,9 +36,7 @@ export function registerMessageHandlers(socket) {
         content: parsed.data.content,
         clientMessageId: parsed.data.clientMessageId,
         replyToMessageId: parsed.data.replyToMessageId,
-        attachments: parsed.data.imgUrl
-          ? [{ url: parsed.data.imgUrl, kind: "image" }]
-          : undefined,
+        attachments: toAttachments(parsed.data),
       });
 
       if (typeof ack === "function") {

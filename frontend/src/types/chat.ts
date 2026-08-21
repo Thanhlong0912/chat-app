@@ -2,7 +2,7 @@ export type ConversationType = "direct" | "group";
 
 export type GroupRole = "owner" | "admin" | "member";
 
-export type MessageKind = "text" | "image" | "file" | "system";
+export type MessageKind = "text" | "image" | "video" | "file" | "system";
 
 export interface Participant {
   _id: string;
@@ -58,10 +58,14 @@ export interface ConversationResponse {
 
 export interface Attachment {
   url: string;
+  /** Cloudinary public_id — server cần nó để xoá được tệp khi xoá tin nhắn. */
+  publicId?: string | null;
   mimeType?: string | null;
   bytes?: number | null;
   width?: number | null;
   height?: number | null;
+  /** Giây, chỉ video mới có. */
+  duration?: number | null;
   originalName?: string | null;
   kind: "image" | "video" | "file";
 }

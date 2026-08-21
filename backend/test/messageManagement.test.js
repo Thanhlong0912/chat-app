@@ -313,6 +313,33 @@ describe("tải tệp đính kèm", () => {
     expect(res.body.code).toBe("UPLOAD_LIMIT_FILE_SIZE");
   });
 
+  // Video được phép lớn hơn ảnh, nhưng vẫn có trần riêng. Multer chỉ nhận một
+  // `limits.fileSize` nên trần của ảnh được kiểm trong controller — hai đường
+  // khác nhau, cùng một status và cùng một mã lỗi.
+  it("từ chối video vượt quá 25MB", async () => {
+    const res = await authedAgent(ctx.alice)
+      .post(`/api/conversations/${ctx.convo._id}/attachments`)
+      .attach("file", Buffer.alloc(26 * 1024 * 1024), {
+        filename: "qualon.mp4",
+        contentType: "video/mp4",
+      })
+      .expect(413);
+
+    expect(res.body.code).toBe("UPLOAD_LIMIT_FILE_SIZE");
+  });
+
+  it("từ chối định dạng video không hỗ trợ", async () => {
+    const res = await authedAgent(ctx.alice)
+      .post(`/api/conversations/${ctx.convo._id}/attachments`)
+      .attach("file", Buffer.alloc(10), {
+        filename: "phim.avi",
+        contentType: "video/x-msvideo",
+      })
+      .expect(400);
+
+    expect(res.body.code).toBe("UNSUPPORTED_FILE_TYPE");
+  });
+
   it("người ngoài không tải lên được", async () => {
     await authedAgent(ctx.outsider)
       .post(`/api/conversations/${ctx.convo._id}/attachments`)

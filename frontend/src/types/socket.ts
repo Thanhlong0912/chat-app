@@ -1,4 +1,4 @@
-import type { Conversation, Message } from "./chat";
+import type { Attachment, Conversation, Message } from "./chat";
 
 /**
  * Hợp đồng socket, bản song ánh của `backend/src/socket/events.js`.
@@ -80,6 +80,15 @@ export interface SendMessageInput {
   content?: string;
   clientMessageId?: string;
   replyToMessageId?: string;
+  /**
+   * Tệp đính kèm kèm đầy đủ metadata.
+   *
+   * Thay cho `imgUrl`: một URL trần làm mất `kind` (video bị lưu thành ảnh và vẽ
+   * ra khung trống) lẫn `publicId` (server không còn gì để dọn trên Cloudinary
+   * khi tin nhắn bị xoá).
+   */
+  attachment?: Attachment;
+  /** @deprecated dùng `attachment`. Giữ lại cho backend chưa lên bản mới. */
   imgUrl?: string;
 }
 

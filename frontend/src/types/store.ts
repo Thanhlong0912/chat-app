@@ -173,7 +173,8 @@ export interface FriendState {
   loading: boolean;
   receivedList: FriendRequest[];
   sentList: FriendRequest[];
-  searchByUsername: (username: string) => Promise<User | null>;
+  searchByUsername: (username: string) => Promise<User[]>;
+  /** Ném khi thất bại — đừng bắt lỗi rồi trả chuỗi, chỗ gọi không phân biệt được. */
   addFriend: (to: string, message?: string) => Promise<string>;
   getAllFriendRequests: () => Promise<void>;
   acceptRequest: (requestId: string) => Promise<void>;

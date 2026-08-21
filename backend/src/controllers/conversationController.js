@@ -8,6 +8,7 @@ import {
   userRoom,
 } from "../socket/events.js";
 import { ROLES } from "../domain/groupPermissions.js";
+import { announcePresenceAmong } from "../socket/handlers/presence.js";
 import { MAX_GROUP_MEMBERS } from "../services/groupService.js";
 import { decodeCursor, encodeCursor, newerThan, olderThan } from "../utils/cursor.js";
 import { advanceRead } from "../services/readReceiptService.js";
@@ -111,6 +112,15 @@ export const createConversation = async (req, res) => {
     // Alias tương thích cho bundle frontend đang mở tab; bỏ ở Phase 9.
     io?.to(userRoom(memberId)).emit(LEGACY_EVENTS.NEW_GROUP, formatted);
   });
+
+  /*
+   * Một conversation mới cũng làm audience thay đổi.
+   *
+   * Audience = bạn bè ∪ thành viên các conversation chung, và tập đó được cache 5
+   * phút. Không xoá cache ở đây thì dấu online trong cuộc trò chuyện vừa mở ra
+   * đứng im màu xám cho tới khi cache hết hạn.
+   */
+  await announcePresenceAmong(everyone);
 
   return res.status(201).json({ conversation: formatted });
 };
