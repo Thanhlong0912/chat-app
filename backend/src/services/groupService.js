@@ -14,6 +14,7 @@ import { invalidateAudience } from "./audienceService.js";
 import { serializeConversation } from "../serializers/conversation.js";
 import { serializeMessage } from "../serializers/message.js";
 import { getIo } from "../socket/io.js";
+import { announcePresenceAmong } from "../socket/handlers/presence.js";
 import { SERVER_EVENTS, conversationRoom, userRoom } from "../socket/events.js";
 import { badRequest, forbidden, notFound } from "../utils/errors.js";
 import logger from "../utils/logger.js";
@@ -268,6 +269,11 @@ export async function addMembers({ conversation, actor, memberIds }) {
       conversation: serializeConversation(conversation, { viewerId: id }),
     });
   });
+
+  // Người mới và nhóm cũ giờ nhìn thấy nhau, nên phải trao đổi trạng thái ngay —
+  // `presence:snapshot` chỉ được gửi một lần lúc kết nối, nên không có bước này
+  // thì dấu online của họ xám cho tới lần tải lại trang tiếp theo.
+  await announcePresenceAmong(participantIds(conversation));
 
   return { conversation, added: toAdd };
 }
