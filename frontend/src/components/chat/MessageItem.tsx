@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, CheckCheck, RotateCw } from "lucide-react";
+import { Check, CheckCheck, Play, RotateCw } from "lucide-react";
 import { Spinner } from "../ui/spinner";
 import { cn, formatDaySeparator, formatMessageTime, isSameDay } from "@/lib/utils";
-import type { Conversation, Message } from "@/types/chat";
+import type { Attachment, Conversation, Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import UserAvatar from "./UserAvatar";
 import MessageActions from "./MessageActions";
+import MediaPreviewModal from "./MediaPreviewModal";
 import ReplyQuote from "./ReplyQuote";
 
 interface MessageItemProps {
@@ -73,6 +74,9 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
    */
   const [entered, setEntered] = useState(false);
   const mounted = useRef(false);
+
+  /** Tệp đang xem cỡ lớn, `null` là không mở gì. */
+  const [preview, setPreview] = useState<Attachment | null>(null);
 
   useEffect(() => {
     if (mounted.current) return;
@@ -177,13 +181,47 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
                 )}
 
                 {message.attachments.map((attachment) => (
-                  <img
+                  <button
                     key={attachment.url}
-                    src={attachment.url}
-                    alt={attachment.originalName ?? "Ảnh đã gửi"}
-                    className="mb-1 max-h-64 rounded-lg object-cover"
-                    loading="lazy"
-                  />
+                    type="button"
+                    onClick={() => setPreview(attachment)}
+                    className="group/media relative mb-1 block overflow-hidden rounded-lg focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    aria-label={
+                      attachment.kind === "video" ? "Xem video" : "Xem ảnh cỡ lớn"
+                    }
+                  >
+                    {attachment.kind === "video" ? (
+                      <>
+                        {/*
+                          `preload="metadata"` chứ không phải "auto": khung chat có
+                          thể chứa nhiều video, và tải sẵn toàn bộ từng cái sẽ ngốn
+                          băng thông cho thứ người dùng có thể không bao giờ mở.
+                          "metadata" đủ để trình duyệt vẽ khung hình đầu.
+                        */}
+                        <video
+                          src={attachment.url}
+                          preload="metadata"
+                          muted
+                          playsInline
+                          className="max-h-64 rounded-lg object-cover"
+                        />
+
+                        {/* Dấu play: không có nó thì video đứng im trông như ảnh hỏng. */}
+                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                          <span className="flex size-12 items-center justify-center rounded-full bg-black/55 transition-smooth group-hover/media:scale-110">
+                            <Play className="size-5 fill-white text-white" />
+                          </span>
+                        </span>
+                      </>
+                    ) : (
+                      <img
+                        src={attachment.url}
+                        alt={attachment.originalName ?? "Ảnh đã gửi"}
+                        className="max-h-64 rounded-lg object-cover transition-smooth group-hover/media:brightness-95"
+                        loading="lazy"
+                      />
+                    )}
+                  </button>
                 ))}
 
                 {message.content && (
@@ -249,6 +287,11 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
           />
         )}
       </div>
+
+      <MediaPreviewModal
+        attachment={preview}
+        onClose={() => setPreview(null)}
+      />
     </>
   );
 };

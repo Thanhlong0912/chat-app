@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-export const MESSAGE_KINDS = ["text", "image", "file", "system"];
+export const MESSAGE_KINDS = ["text", "image", "video", "file", "system"];
 
 export const SYSTEM_EVENTS = [
   "group_created",

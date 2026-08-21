@@ -52,7 +52,13 @@ export async function createMessage({
   const payload = {
     conversationId: conversation._id,
     senderId: sender._id,
-    kind: kind ?? (attachments?.length ? "image" : "text"),
+    /*
+     * `kind` của tin nhắn theo `kind` của tệp đính kèm đầu tiên.
+     *
+     * Bản trước cứng nhắc gán "image" cho mọi tin có đính kèm, nên một video được
+     * lưu là tin nhắn ảnh và client vẽ nó bằng thẻ <img> — ra một khung trống.
+     */
+    kind: kind ?? (attachments?.length ? (attachments[0].kind ?? "image") : "text"),
     content: content?.trim() || null,
     ...(attachments?.length ? { attachments } : {}),
     ...(replyTo ? { replyTo } : {}),
@@ -241,8 +247,12 @@ export async function deleteMessage({ messageId, actor }) {
     throw forbidden("CANNOT_DELETE_MESSAGE", "Bạn không có quyền xoá tin nhắn này");
   }
 
-  // Dọn tệp trên Cloudinary trước khi mất tham chiếu tới publicId.
-  const publicIds = (message.attachments ?? []).map((a) => a.publicId).filter(Boolean);
+  // Dọn tệp trên Cloudinary trước khi mất tham chiếu tới publicId. Giữ cả `kind`:
+  // `destroy` mặc định resource_type "image", nên không truyền "video" thì video
+  // không bao giờ bị xoá thật.
+  const assets = (message.attachments ?? [])
+    .filter((a) => a.publicId)
+    .map((a) => ({ publicId: a.publicId, resourceType: a.kind === "video" ? "video" : "image" }));
 
   message.deletedAt = new Date();
   message.deletedBy = actor._id;
@@ -250,7 +260,7 @@ export async function deleteMessage({ messageId, actor }) {
   message.attachments = undefined;
   await message.save();
 
-  await Promise.all(publicIds.map((id) => destroyImage(id)));
+  await Promise.all(assets.map((a) => destroyImage(a.publicId, a.resourceType)));
 
   // Tin nhắn cuối bị xoá thì phải tính lại phần xem trước, nếu không sidebar vẫn
   // hiển thị nội dung đã bị xoá.

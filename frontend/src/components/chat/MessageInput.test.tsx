@@ -258,10 +258,10 @@ describe("chỉnh sửa tin nhắn", () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it("không cho gửi ảnh khi đang sửa", () => {
+  it("không cho gửi tệp đính kèm khi đang sửa", () => {
     setup();
 
-    expect(screen.getByLabelText("Gửi ảnh")).toBeDisabled();
+    expect(screen.getByLabelText("Gửi ảnh hoặc video")).toBeDisabled();
   });
 });
 

@@ -5,9 +5,14 @@ import {
   editMessage,
   findOrCreateDirectConversation,
 } from "../services/messageService.js";
-import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
+import {
+  MAX_IMAGE_BYTES,
+  isVideoMimeType,
+  uploadImageFromBuffer,
+} from "../middlewares/uploadMiddleware.js";
+import { toAttachments } from "../schemas/messageSchemas.js";
 import { isMember } from "../domain/groupPermissions.js";
-import { badRequest } from "../utils/errors.js";
+import { badRequest, payloadTooLarge } from "../utils/errors.js";
 
 /**
  * Gửi tin nhắn 1-1 qua HTTP.
@@ -17,8 +22,7 @@ import { badRequest } from "../utils/errors.js";
  * đường dự phòng khi socket không kết nối được.
  */
 export const sendDirectMessage = async (req, res) => {
-  const { recipientId, content, conversationId, clientMessageId, replyToMessageId, imgUrl } =
-    req.body;
+  const { recipientId, content, conversationId, clientMessageId, replyToMessageId } = req.body;
   const sender = req.user;
 
   let conversation;
@@ -52,7 +56,7 @@ export const sendDirectMessage = async (req, res) => {
     content,
     clientMessageId,
     replyToMessageId,
-    attachments: imgUrl ? [{ url: imgUrl, kind: "image" }] : undefined,
+    attachments: toAttachments(req.body),
   });
 
   return res.status(201).json({ message: serialized });
@@ -89,9 +93,28 @@ export const uploadAttachment = async (req, res) => {
     throw badRequest("NO_FILE", "Chưa chọn tệp nào");
   }
 
+  const isVideo = isVideoMimeType(req.file.mimetype);
+
+  /*
+   * Ảnh và video có trần dung lượng khác nhau, nhưng multer chỉ nhận MỘT
+   * `limits.fileSize`. Trần của multer đặt theo video (mức cao hơn), còn trần
+   * riêng của ảnh kiểm ở đây — nơi đã biết cả mimetype lẫn kích thước thật.
+   */
+  if (!isVideo && req.file.size > MAX_IMAGE_BYTES) {
+    // Cùng status và cùng `code` với lỗi multer bắn ra khi vượt `limits.fileSize`,
+    // nên client không phải phân biệt hai nguồn cho cùng một tình huống.
+    throw payloadTooLarge(
+      "UPLOAD_LIMIT_FILE_SIZE",
+      `Ảnh tối đa ${Math.round(MAX_IMAGE_BYTES / (1024 * 1024))}MB`,
+    );
+  }
+
   const result = await uploadImageFromBuffer(req.file.buffer, {
     folder: "moji_chat/attachments",
-    // Không crop như avatar: ảnh trong tin nhắn phải giữ nguyên khung hình.
+    // `resource_type` quyết định Cloudinary xử lý tệp thế nào; để mặc định
+    // "image" thì một video sẽ bị từ chối.
+    resource_type: isVideo ? "video" : "image",
+    // Không crop như avatar: tệp trong tin nhắn phải giữ nguyên khung hình.
     transformation: undefined,
   });
 
@@ -103,14 +126,16 @@ export const uploadAttachment = async (req, res) => {
       bytes: result.bytes,
       width: result.width,
       height: result.height,
+      // Chỉ video mới có; client dùng để hiện độ dài trước khi phát.
+      ...(result.duration ? { duration: result.duration } : {}),
       originalName: req.file.originalname,
-      kind: "image",
+      kind: isVideo ? "video" : "image",
     },
   });
 };
 
 export const sendGroupMessage = async (req, res) => {
-  const { content, clientMessageId, replyToMessageId, imgUrl } = req.body;
+  const { content, clientMessageId, replyToMessageId } = req.body;
 
   // Do requireMembership gắn vào, đã xác nhận người gửi là thành viên của group.
   const conversation = req.conversation;
@@ -121,7 +146,7 @@ export const sendGroupMessage = async (req, res) => {
     content,
     clientMessageId,
     replyToMessageId,
-    attachments: imgUrl ? [{ url: imgUrl, kind: "image" }] : undefined,
+    attachments: toAttachments(req.body),
   });
 
   return res.status(201).json({ message: serialized });
