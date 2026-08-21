@@ -1,93 +1,116 @@
-import type { FieldErrors, UseFormRegister } from "react-hook-form";
-import type { IFormValues } from "../chat/AddFriendModal";
+import { Search, UserRoundX } from "lucide-react";
+import type { User } from "@/types/user";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { DialogFooter } from "../ui/dialog";
-import { DialogClose } from "@radix-ui/react-dialog";
-import { Button } from "../ui/button";
-import { Search } from "lucide-react";
+import { Spinner } from "../ui/spinner";
+import UserAvatar from "../chat/UserAvatar";
 
 interface SearchFormProps {
-  register: UseFormRegister<IFormValues>;
-  errors: FieldErrors<IFormValues>;
+  term: string;
+  onTermChange: (value: string) => void;
   loading: boolean;
-  usernameValue: string;
-  isFound: boolean | null;
-  searchedUsername: string;
-  onSubmit?: (e: React.FormEvent<HTMLFormElement>) => void;
-  onCancel: () => void;
+  results: User[];
+  /** Đã tìm xong ít nhất một lần cho từ khoá hiện tại. */
+  searched: boolean;
+  onSelect: (user: User) => void;
 }
 
+/**
+ * Tìm bạn bè, hiện kết quả ngay khi gõ.
+ *
+ * Trước đây đây là một <form> phải bấm nút "Tìm", và backend khớp username TUYỆT
+ * ĐỐI — nên phải gõ đúng từng ký tự tên người kia mới thấy gì. Giờ mỗi ký tự đều
+ * cho ra danh sách gợi ý, và chọn một người sẽ chuyển sang bước viết lời giới
+ * thiệu.
+ */
 const SearchForm = ({
-  register,
-  errors,
-  usernameValue,
+  term,
+  onTermChange,
   loading,
-  isFound,
-  searchedUsername,
-  onSubmit,
-  onCancel,
+  results,
+  searched,
+  onSelect,
 }: SearchFormProps) => {
+  const showEmptyState = searched && !loading && term.trim() !== "" && results.length === 0;
+
   return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-4"
-    >
+    <div className="space-y-4">
       <div className="space-y-2">
         <Label
           htmlFor="username"
           className="text-sm font-semibold"
         >
-          Tìm bằng username
+          Tìm bằng username hoặc tên
         </Label>
 
-        <Input
-          id="username"
-          placeholder="Gõ tên username vào đây..."
-          className="glass border-border/50 focus:border-primary/50 transition-smooth"
-          {...register("username", {
-            required: "Username không được bỏ trống",
-          })}
-        ></Input>
-        {errors.username && (
-          <p className="error-message">{errors.username.message}</p>
-        )}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
-        {isFound === false && (
-          <span className="error-message">
-            Không tìm thấy
-            <span className="font-semibold">@{searchedUsername}</span>
-          </span>
-        )}
+          <Input
+            id="username"
+            value={term}
+            onChange={(event) => onTermChange(event.target.value)}
+            placeholder="Gõ một chữ cái là đủ..."
+            className="glass border-border/50 pl-9 pr-9 transition-smooth focus:border-primary/50"
+            autoComplete="off"
+            // Danh sách kết quả tự cập nhật, screen reader cần được báo.
+            aria-describedby="friend-search-results"
+          />
+
+          {loading && (
+            <Spinner className="absolute right-3 top-1/2 size-4 -translate-y-1/2" />
+          )}
+        </div>
       </div>
 
-      <DialogFooter>
-        <DialogClose asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1 glass hover:text-destructive"
-            onClick={onCancel}
-          >
-            Cancel
-          </Button>
-        </DialogClose>
+      <div
+        id="friend-search-results"
+        aria-live="polite"
+        className="min-h-[60px]"
+      >
+        {results.length > 0 && (
+          <ul className="max-h-60 divide-y overflow-y-auto rounded-lg border">
+            {results.map((user) => (
+              <li key={user._id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(user)}
+                  className="flex w-full items-center gap-3 p-2.5 text-left transition-smooth hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <UserAvatar
+                    type="chat"
+                    name={user.displayName}
+                    avatarUrl={user.avatarUrl}
+                  />
 
-        <Button
-          type="submit"
-          disabled={loading || !usernameValue?.trim()}
-          className="flex-1 bg-gradient-chat text-white hover:opacity-90 transition-smooth"
-        >
-          {loading ? (
-            <span>Đang tìm ...</span>
-          ) : (
-            <>
-              <Search className="size-4 mr-2" /> Tìm
-            </>
-          )}
-        </Button>
-      </DialogFooter>
-    </form>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      {user.displayName}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      @{user.username}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {showEmptyState && (
+          <p className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+            <UserRoundX className="size-4" />
+            Không tìm thấy ai khớp với “{term.trim()}”
+          </p>
+        )}
+
+        {!searched && !loading && term.trim() === "" && (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Gõ để tìm người bạn muốn kết bạn.
+          </p>
+        )}
+      </div>
+    </div>
   );
 };
 

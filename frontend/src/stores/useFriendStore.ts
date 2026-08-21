@@ -1,6 +1,5 @@
 import { friendService } from "@/services/friendService";
 import type { FriendState } from "@/types/store";
-import { describeError } from "@/lib/errors";
 import { create } from "zustand";
 
 export const useFriendStore = create<FriendState>((set) => ({
@@ -15,18 +14,25 @@ export const useFriendStore = create<FriendState>((set) => ({
       return await friendService.searchByUsername(username);
     } catch (error) {
       console.error("Lỗi xảy ra khi tìm user bằng username", error);
-      return null;
+      return [];
     } finally {
       set({ loading: false });
     }
   },
 
+  /**
+   * Gửi lời mời kết bạn. NÉM khi thất bại.
+   *
+   * Bản trước `catch` rồi `return describeError(error)` — trả về chuỗi mô tả LỖI
+   * ở đúng vị trí mà thành công trả về chuỗi "Gửi lời mời kết bạn thành công".
+   * Chỗ gọi không phân biệt được hai thứ đó, nên nó `toast.success(...)` nội dung
+   * lỗi rồi đóng modal: một lời mời chưa từng được gửi hiện ra như đã gửi xong,
+   * và cách duy nhất để phát hiện là tải lại trang xem danh sách đã gửi.
+   */
   addFriend: async (to, message) => {
     try {
       set({ loading: true });
       return await friendService.sendFriendRequest(to, message);
-    } catch (error) {
-      return describeError(error);
     } finally {
       set({ loading: false });
     }

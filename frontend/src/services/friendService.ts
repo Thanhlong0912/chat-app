@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import type { User } from "@/types/user";
 
 /**
  * Lớp gọi API cho bạn bè.
@@ -11,9 +12,19 @@ import api from "@/lib/axios";
  * Nguyên tắc: service ném, store bắt.
  */
 export const friendService = {
-  async searchByUsername(username: string) {
+  /**
+   * Tìm người dùng theo username hoặc tên hiển thị, khớp một phần.
+   *
+   * Đọc `users` nếu có, và rơi về `user` khi không — backend ở Render còn frontend
+   * ở Vercel, hai bên không lên bản mới cùng lúc, nên bundle này phải chạy được cả
+   * với backend chưa deploy dạng mảng.
+   */
+  async searchByUsername(username: string): Promise<User[]> {
     const res = await api.get("/users/search", { params: { username } });
-    return res.data.user;
+
+    if (Array.isArray(res.data.users)) return res.data.users;
+
+    return res.data.user ? [res.data.user] : [];
   },
 
   async sendFriendRequest(to: string, message?: string) {
