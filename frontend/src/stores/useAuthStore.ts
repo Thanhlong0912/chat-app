@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import axios from "axios";
 import { toast } from "sonner";
 import { authService } from "@/services/authService";
 import type { AuthState } from "@/types/store";
@@ -107,7 +108,27 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch (error) {
           console.error(error);
-          toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
+
+          /*
+           * Không có cookie nào cả nghĩa là chưa từng có phiên để mà hết hạn.
+           *
+           * `ProtectedRoute` gọi refresh() ngay khi mount cho bất kỳ ai vào "/" mà
+           * chưa có access token trong bộ nhớ — gồm cả người lần đầu vào trang. Họ
+           * nhận 401 NO_REFRESH_TOKEN, và trước đây bị báo "Phiên đăng nhập đã hết
+           * hạn" ngay trên màn hình đầu tiên họ nhìn thấy.
+           *
+           * Các mã còn lại (REFRESH_TOKEN_INVALID/_EXPIRED/_REUSED) là phiên thật
+           * sự kết thúc. Lỗi mạng thì không có mã nào để đọc — im lặng ở đó sẽ giấu
+           * mất lỗi thật, nên mặc định vẫn là báo.
+           */
+          const noSessionToExpire =
+            axios.isAxiosError<{ code?: string }>(error) &&
+            error.response?.data?.code === "NO_REFRESH_TOKEN";
+
+          if (!noSessionToExpire) {
+            toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
+          }
+
           get().clearState();
         } finally {
           set({ loading: false });
