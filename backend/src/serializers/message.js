@@ -46,6 +46,40 @@ const shapeAttachments = (doc) => {
 };
 
 /**
+ * Gom biểu cảm thành từng nhóm theo emoji.
+ *
+ * Gom ở SERVER chứ không đẩy mảng thô cho client: một tin nhắn trong nhóm đông có
+ * thể có hàng trăm lượt thả, và client chỉ cần biết "emoji nào, bao nhiêu lượt,
+ * mình đã thả chưa". Trả mảng thô sẽ gửi kèm id của mọi người thả trong mọi trang
+ * tin nhắn — vừa nặng, vừa là dữ liệu client không cần.
+ *
+ * Thứ tự theo lượt thả ĐẦU TIÊN, nên các chip không nhảy chỗ khi có người thả thêm.
+ */
+const shapeReactions = (doc, viewerId) => {
+  const raw = doc.reactions ?? [];
+  if (raw.length === 0) return [];
+
+  const groups = new Map();
+
+  for (const reaction of raw) {
+    let group = groups.get(reaction.emoji);
+
+    if (!group) {
+      group = { emoji: reaction.emoji, count: 0, reactedByMe: false };
+      groups.set(reaction.emoji, group);
+    }
+
+    group.count += 1;
+
+    if (viewerId && String(reaction.userId) === String(viewerId)) {
+      group.reactedByMe = true;
+    }
+  }
+
+  return [...groups.values()];
+};
+
+/**
  * Suy ra `kind`.
  *
  * Không thể chỉ dựa vào `doc.kind`: Mongoose áp default `"text"` khi hydrate một
@@ -85,6 +119,9 @@ export function serializeMessage(doc, { viewerId } = {}) {
       content: null,
       attachments: [],
       replyTo: null,
+      // Biểu cảm của một tin đã xoá cũng biến mất: giữ lại chúng sẽ để lộ rằng
+      // tin nhắn từng có phản ứng gì, trên một nội dung không còn được phép đọc.
+      reactions: [],
       deletedAt: plain.deletedAt,
     };
   }
@@ -93,6 +130,7 @@ export function serializeMessage(doc, { viewerId } = {}) {
     ...base,
     content: plain.content ?? null,
     attachments: shapeAttachments(plain),
+    reactions: shapeReactions(plain, viewerId),
     replyTo: plain.replyTo
       ? {
           messageId: String(plain.replyTo.messageId),

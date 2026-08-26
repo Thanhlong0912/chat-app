@@ -6,6 +6,7 @@ import { registerAuthHandlers } from "./handlers/auth.js";
 import { registerConversationHandlers } from "./handlers/conversation.js";
 import { registerMessageHandlers } from "./handlers/message.js";
 import { onPresenceConnect, registerPresenceHandlers } from "./handlers/presence.js";
+import { registerReactionHandlers } from "./handlers/reaction.js";
 import { registerReadHandlers } from "./handlers/read.js";
 import { registerSyncHandlers } from "./handlers/sync.js";
 import { registerTypingHandlers } from "./handlers/typing.js";
@@ -53,6 +54,7 @@ function registerHandlers(io) {
     registerAuthHandlers(socket);
     registerConversationHandlers(socket);
     registerMessageHandlers(socket);
+    registerReactionHandlers(socket);
     registerReadHandlers(socket);
     registerSyncHandlers(socket);
     registerTypingHandlers(socket);

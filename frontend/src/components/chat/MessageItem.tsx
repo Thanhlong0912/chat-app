@@ -9,6 +9,7 @@ import UserAvatar from "./UserAvatar";
 import MessageActions from "./MessageActions";
 import MediaPreviewModal from "./MediaPreviewModal";
 import ReplyQuote from "./ReplyQuote";
+import MessageReactions from "./MessageReactions";
 
 interface MessageItemProps {
   message: Message;
@@ -232,6 +233,15 @@ const MessageItem = ({ message, index, messages, selectedConvo }: MessageItemPro
               </>
             )}
           </div>
+
+          {/* Nằm NGOÀI bong bóng, ngay dưới nó — chip đè lên nội dung sẽ che mất
+              chữ ở tin nhắn ngắn, và phải đọc được cả ở tin nhắn đã xoá là không
+              đúng: server đã trả mảng rỗng cho bia mộ nên component tự ẩn. */}
+          <MessageReactions
+            conversationId={selectedConvo._id}
+            messageId={message._id}
+            align={isOwn ? "end" : "start"}
+          />
 
           {isOwn && (
             <span className="flex items-center gap-1 px-1 text-[11px] text-muted-foreground">

@@ -4,6 +4,8 @@ import type {
   Conversation,
   ConversationResponse,
   Message,
+  ReactionEmoji,
+  ReactionGroup,
 } from "@/types/chat";
 import type { SendMessageInput } from "@/types/socket";
 
@@ -95,6 +97,29 @@ export const chatService = {
     );
 
     return res.data.attachment;
+  },
+
+  /**
+   * Thả / gỡ biểu cảm qua HTTP. Đường dự phòng khi socket không dùng được.
+   *
+   * Là TOGGLE: server tự quyết định thả hay gỡ dựa trên trạng thái thật, nên hai
+   * tab không đồng bộ vẫn hội tụ về cùng một kết quả.
+   */
+  async toggleReaction(
+    messageId: string,
+    emoji: ReactionEmoji,
+  ): Promise<{ reactions: ReactionGroup[]; active: boolean }> {
+    const res = await api.put(`/messages/${messageId}/reactions`, { emoji });
+    return { reactions: res.data.reactions, active: res.data.active };
+  },
+
+  /** Ghim / lưu trữ / tắt thông báo — tuỳ chọn riêng của người đang đăng nhập. */
+  async updateConversationSettings(
+    conversationId: string,
+    settings: { pinned?: boolean; archived?: boolean; muteMinutes?: number | null },
+  ): Promise<Conversation> {
+    const res = await api.patch(`/conversations/${conversationId}/settings`, settings);
+    return res.data.conversation;
   },
 
   async markAsSeen(conversationId: string, lastReadMessageId?: string) {

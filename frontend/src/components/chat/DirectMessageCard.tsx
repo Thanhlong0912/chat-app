@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import UnreadCountBadge from "./UnreadCountBadge";
+import ConversationMenu from "./ConversationMenu";
+import { BellOff } from "lucide-react";
 
 const DirectMessageCard = ({ convoId }: { convoId: string }) => {
   const user = useAuthStore((s) => s.user);
@@ -36,6 +38,8 @@ const DirectMessageCard = ({ convoId }: { convoId: string }) => {
       isActive={activeConversationId === convo._id}
       onSelect={selectConversation}
       unreadCount={unreadCount}
+      pinned={convo.pinned}
+      actions={<ConversationMenu conversation={convo} />}
       leftSection={
         <>
           <UserAvatar
@@ -48,14 +52,22 @@ const DirectMessageCard = ({ convoId }: { convoId: string }) => {
         </>
       }
       subtitle={
-        <p
-          className={cn(
-            "text-sm truncate",
-            unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground"
+        <>
+          {convo.mutedUntil && (
+            <BellOff
+              className="size-3 shrink-0 text-muted-foreground"
+              aria-label="Đã tắt thông báo"
+            />
           )}
-        >
-          {lastMessage}
-        </p>
+          <p
+            className={cn(
+              "text-sm truncate",
+              unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground"
+            )}
+          >
+            {lastMessage}
+          </p>
+        </>
       }
     />
   );

@@ -4,12 +4,21 @@ import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import { chatService } from "@/services/chatService";
 import type { ChatState, MessageThread } from "@/types/store";
-import type { Attachment, Conversation, Message } from "@/types/chat";
+import type {
+  Attachment,
+  Conversation,
+  Message,
+  ReactionEmoji,
+  ReactionGroup,
+} from "@/types/chat";
 import { describeError } from "@/lib/errors";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
 
 const EMPTY_IDS: string[] = [];
+// Hằng số dùng chung: trả `[]` mới mỗi lần sẽ khiến `useShallow` thấy tham chiếu
+// khác nhau và re-render vô hạn.
+const EMPTY_REACTIONS: ReactionGroup[] = [];
 
 const emptyThread = (): MessageThread => ({
   ids: [],
@@ -20,11 +29,23 @@ const emptyThread = (): MessageThread => ({
   error: null,
 });
 
-/** Sắp theo hoạt động mới nhất. Tie-break bằng id để thứ tự luôn xác định. */
+/**
+ * Ghim trước, rồi tới hoạt động mới nhất. Tie-break bằng id để thứ tự luôn xác định.
+ *
+ * Ghim được xếp ở TẦNG SẮP XẾP chứ không phải render thành một danh sách riêng:
+ * làm hai danh sách thì mọi selector, mọi skeleton và phần lọc tìm kiếm đều phải
+ * nhân đôi, còn ở đây một cuộc trò chuyện được ghim chỉ đơn giản là nổi lên đầu
+ * đúng danh sách nó vốn thuộc về.
+ */
 const sortOrder = (ids: string[], byId: Record<string, Conversation>) =>
   [...ids].sort((a, b) => {
     const left = byId[a];
     const right = byId[b];
+
+    if (Boolean(left?.pinned) !== Boolean(right?.pinned)) {
+      return left?.pinned ? -1 : 1;
+    }
+
     const leftAt = new Date(left?.lastMessageAt ?? left?.createdAt ?? 0).getTime();
     const rightAt = new Date(right?.lastMessageAt ?? right?.createdAt ?? 0).getTime();
 
@@ -61,6 +82,53 @@ const insertMessage = (thread: MessageThread, message: Message): MessageThread =
   ids.splice(index, 0, message._id);
 
   return { ...thread, ids, byId };
+};
+
+/**
+ * Bật/tắt một emoji trong danh sách đã gom, dưới góc nhìn của CHÍNH người dùng.
+ *
+ * Giữ nguyên thứ tự các nhóm đang có, và bỏ hẳn nhóm về 0 thay vì để lại một chip
+ * `count: 0`. Nhóm mới luôn được thêm vào CUỐI — cùng quy ước với server (thứ tự
+ * theo lượt thả đầu tiên), nên các chip không nhảy chỗ khi bản thật về tới.
+ */
+const applyToggle = (groups: ReactionGroup[], emoji: ReactionEmoji): ReactionGroup[] => {
+  const existing = groups.find((g) => g.emoji === emoji);
+
+  if (!existing) {
+    return [...groups, { emoji, count: 1, reactedByMe: true }];
+  }
+
+  const delta = existing.reactedByMe ? -1 : 1;
+  const count = existing.count + delta;
+
+  if (count <= 0) return groups.filter((g) => g.emoji !== emoji);
+
+  return groups.map((g) =>
+    g.emoji === emoji ? { ...g, count, reactedByMe: !g.reactedByMe } : g,
+  );
+};
+
+/** Ghi lại danh sách biểu cảm của một tin nhắn, không đụng tới thứ tự thread. */
+const writeReactions = (
+  state: ChatState,
+  conversationId: string,
+  messageId: string,
+  reactions: ReactionGroup[],
+): Partial<ChatState> => {
+  const thread = state.messages[conversationId];
+  const message = thread?.byId[messageId];
+
+  if (!thread || !message) return state;
+
+  return {
+    messages: {
+      ...state.messages,
+      [conversationId]: {
+        ...thread,
+        byId: { ...thread.byId, [messageId]: { ...message, reactions } },
+      },
+    },
+  };
 };
 
 const isGroupConversation = (conversation: Conversation | undefined) =>
@@ -260,6 +328,8 @@ export const useChatStore = create<ChatState>()(
           kind: optimisticAttachments[0]?.kind ?? "text",
           content: input.content ?? null,
           attachments: optimisticAttachments,
+          // Tin nhắn chưa tồn tại ở server thì chưa ai thả được biểu cảm lên nó.
+          reactions: [],
           replyTo: null,
           createdAt: new Date().toISOString(),
           editedAt: null,
@@ -406,6 +476,98 @@ export const useChatStore = create<ChatState>()(
             },
           };
         }),
+
+      toggleReaction: async (conversationId, messageId, emoji) => {
+        const thread = get().messages[conversationId];
+        const message = thread?.byId[messageId];
+
+        // Tin nhắn lạc quan chưa có id thật thì server không tra được.
+        if (!message || messageId.startsWith("tmp:")) return;
+
+        const before = message.reactions;
+        // Trạng thái mong muốn được suy từ bản đang hiển thị, nên UI đảo ngay khi
+        // bấm thay vì đợi một vòng mạng.
+        const optimistic = applyToggle(before, emoji);
+
+        set((state) => writeReactions(state, conversationId, messageId, optimistic));
+
+        try {
+          const socket = useSocketStore.getState();
+
+          // Socket không có ack đồng bộ ở đây; bản broadcast `reaction:updated` sẽ
+          // sửa lại nếu client đoán sai. HTTP là dự phòng khi socket đang đứt.
+          if (!socket.toggleReaction(messageId, emoji)) {
+            const { reactions } = await chatService.toggleReaction(messageId, emoji);
+            set((s) => writeReactions(s, conversationId, messageId, reactions));
+          }
+        } catch (error) {
+          // Hoàn tác về đúng bản trước khi bấm — khác với gửi tin nhắn, ở đây
+          // không có gì để "thử lại", nên để UI nói dối là tệ hơn.
+          set((s) => writeReactions(s, conversationId, messageId, before));
+          set({ error: describeError(error) });
+        }
+      },
+
+      applyReaction: (conversationId, messageId, reactions, actorId, emoji, active) => {
+        const meId = useAuthStore.getState().user?._id;
+
+        set((state) => {
+          const existing = state.messages[conversationId]?.byId[messageId];
+          if (!existing) return state;
+
+          /*
+           * Bản broadcast không mang `reactedByMe` — nó dùng chung cho cả room.
+           * Cờ của chính mình được giữ lại từ state hiện có, và chỉ đổi khi CHÍNH
+           * TA là người vừa bấm (có thể từ một tab khác của cùng tài khoản).
+           */
+          const isMine = actorId === meId;
+
+          const merged = reactions.map((group) => ({
+            ...group,
+            reactedByMe:
+              isMine && group.emoji === emoji
+                ? active
+                : (existing.reactions.find((r) => r.emoji === group.emoji)?.reactedByMe ??
+                  false),
+          }));
+
+          return writeReactions(state, conversationId, messageId, merged);
+        });
+      },
+
+      updateConversationSettings: async (conversationId, settings) => {
+        const existing = get().conversationsById[conversationId];
+        if (!existing) return;
+
+        // Cập nhật lạc quan: ghim/lưu trữ phải phản hồi tức thì, và server sẽ phát
+        // `conversation:updated` về mọi thiết bị của chính người này để chốt lại.
+        const optimistic: Partial<Conversation> = {};
+        if (settings.pinned !== undefined) optimistic.pinned = settings.pinned;
+        if (settings.archived !== undefined) optimistic.archived = settings.archived;
+
+        get().updateConversation({ _id: conversationId, ...optimistic });
+
+        try {
+          const conversation = await chatService.updateConversationSettings(
+            conversationId,
+            settings,
+          );
+
+          get().upsertConversation(conversation);
+        } catch (error) {
+          // Trả về đúng giá trị cũ, không phải giá trị mặc định.
+          get().updateConversation({
+            _id: conversationId,
+            pinned: existing.pinned,
+            archived: existing.archived,
+            mutedUntil: existing.mutedUntil,
+          });
+
+          const message = describeError(error);
+          set({ error: message });
+          toast.error(message);
+        }
+      },
 
       upsertMessage: (message) => {
         const meId = useAuthStore.getState().user?._id;
@@ -743,7 +905,10 @@ export const useConversationOrder = () =>
  * Trả về id chứ không phải object, để card tự đăng ký vào đúng conversation của nó
  * — nhờ vậy một tin nhắn mới chỉ re-render một card, không phải cả danh sách.
  */
-export const useConversationIdsByType = (type: "direct" | "group") =>
+export const useConversationIdsByType = (
+  type: "direct" | "group",
+  { archived = false }: { archived?: boolean } = {},
+) =>
   useChatStore(
     useShallow((s) => {
       const query = s.searchQuery.trim().toLowerCase();
@@ -751,6 +916,11 @@ export const useConversationIdsByType = (type: "direct" | "group") =>
       return s.conversationOrder.filter((id) => {
         const conversation = s.conversationsById[id];
         if (conversation?.type !== type) return false;
+
+        // Lưu trữ là một ngăn riêng: mặc định danh sách chính chỉ hiện những cuộc
+        // trò chuyện CHƯA lưu trữ, và ngăn lưu trữ hiện đúng phần còn lại.
+        if (Boolean(conversation.archived) !== archived) return false;
+
         if (!query) return true;
 
         // Khớp theo tên nhóm, tên thành viên, hoặc nội dung tin nhắn cuối.
@@ -801,3 +971,22 @@ export const useDraft = (conversationId: string | null | undefined) =>
   useChatStore((s) => (conversationId ? (s.drafts[conversationId] ?? "") : ""));
 
 export const useChatError = () => useChatStore((s) => s.error);
+
+/** Số cuộc trò chuyện đã lưu trữ, để quyết định có hiện ngăn "Lưu trữ" hay không. */
+export const useArchivedCount = () =>
+  useChatStore(
+    (s) => s.conversationOrder.filter((id) => s.conversationsById[id]?.archived).length,
+  );
+
+/** Biểu cảm của một tin nhắn — đăng ký hẹp để một lượt thả chỉ vẽ lại một bong bóng. */
+export const useReactions = (
+  conversationId: string | null | undefined,
+  messageId: string,
+) =>
+  useChatStore(
+    useShallow((s) =>
+      conversationId
+        ? (s.messages[conversationId]?.byId[messageId]?.reactions ?? EMPTY_REACTIONS)
+        : EMPTY_REACTIONS,
+    ),
+  );

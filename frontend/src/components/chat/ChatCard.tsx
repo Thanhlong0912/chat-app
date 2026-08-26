@@ -1,3 +1,4 @@
+import { Pin } from "lucide-react";
 import { formatOnlineTime, cn } from "@/lib/utils";
 
 interface ChatCardProps {
@@ -9,6 +10,16 @@ interface ChatCardProps {
   unreadCount?: number;
   leftSection: React.ReactNode;
   subtitle: React.ReactNode;
+  /** Ghim: hiện một dấu nhỏ để người dùng biết vì sao dòng này nằm trên cùng. */
+  pinned?: boolean;
+  /**
+   * Menu thao tác, render như ANH EM của <button> chứ không nằm trong nó.
+   *
+   * Lồng một button trong button là HTML không hợp lệ và làm hỏng điều hướng bàn
+   * phím — đúng lỗi đã phải sửa hai lần ở sidebar. Vì vậy card được bọc trong một
+   * `div.relative`, và menu được định vị tuyệt đối bên trên.
+   */
+  actions?: React.ReactNode;
 }
 
 /**
@@ -28,10 +39,13 @@ const ChatCard = ({
   unreadCount,
   leftSection,
   subtitle,
+  pinned,
+  actions,
 }: ChatCardProps) => {
   const hasUnread = Boolean(unreadCount && unreadCount > 0);
 
   return (
+    <div className="group/card relative">
     <button
       type="button"
       onClick={() => onSelect(convoId)}
@@ -51,7 +65,14 @@ const ChatCard = ({
         <div className="relative shrink-0">{leftSection}</div>
 
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center justify-between gap-2">
+          {/* Chừa chỗ cho nút menu luôn hiện trên mobile; từ `md` trở lên nút chỉ
+              xuất hiện khi hover nên không cần padding. */}
+          <div
+            className={cn(
+              "mb-1 flex items-center justify-between gap-2",
+              actions && "pr-7 md:pr-0",
+            )}
+          >
             <h3
               className={cn(
                 "truncate text-sm",
@@ -63,7 +84,21 @@ const ChatCard = ({
               {name}
             </h3>
 
-            <span className="shrink-0 text-xs text-muted-foreground">
+            <span
+              className={cn(
+                "flex shrink-0 items-center gap-1 text-xs text-muted-foreground",
+                // Chỉ nhường chỗ cho nút menu khi nó thực sự hiện ra vì hover —
+                // tức là từ `md` trở lên. Trên mobile nút luôn hiện, nên chỗ cho
+                // nó được chừa sẵn bằng padding ở dưới thay vì giấu mất giờ.
+                actions && "md:group-hover/card:opacity-0",
+              )}
+            >
+              {pinned && (
+                <Pin
+                  className="size-3 fill-current"
+                  aria-label="Đã ghim"
+                />
+              )}
               {timestamp ? formatOnlineTime(timestamp) : ""}
             </span>
           </div>
@@ -72,6 +107,21 @@ const ChatCard = ({
         </div>
       </div>
     </button>
+
+      {/*
+        Hiện SẴN trên mobile, chỉ ẩn-hiện theo hover từ `md` trở lên.
+
+        Thiết bị cảm ứng không có hover: một nút chỉ xuất hiện khi `group-hover`
+        là một nút không tồn tại trên điện thoại, nên ghim/tắt thông báo/lưu trữ
+        sẽ hoàn toàn không với tới được ở đúng nơi ứng dụng này được dùng nhiều
+        nhất. `focus-within` giữ cho bàn phím vẫn mở được nó trên desktop.
+      */}
+      {actions && (
+        <div className="absolute right-2 top-2 transition-smooth md:opacity-0 md:focus-within:opacity-100 md:group-hover/card:opacity-100">
+          {actions}
+        </div>
+      )}
+    </div>
   );
 };
 

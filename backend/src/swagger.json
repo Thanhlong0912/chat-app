@@ -1091,6 +1091,79 @@
         }
       }
     },
+    "/conversations/{conversationId}/settings": {
+      "patch": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Ghim, lưu trữ, tắt thông báo",
+        "description": "Ba tuỳ chọn RIÊNG CỦA TỪNG NGƯỜI: một người lưu trữ nhóm không làm nhóm đó biến mất khỏi hộp thư của người khác. Vì vậy kết quả chỉ được phát về các thiết bị của chính người gọi, không phát ra room của conversation. Cả ba field đều optional và độc lập — client gửi đúng thứ nó đổi, nên hai tab không ghi đè lẫn nhau bằng trạng thái cũ.",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "6a83cfd55df7471cac7f192a"
+            },
+            "description": "Id cuộc trò chuyện"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pinned": {
+                    "type": "boolean"
+                  },
+                  "archived": {
+                    "type": "boolean"
+                  },
+                  "muteMinutes": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "`null` để bật lại thông báo. Trần 1 năm."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Conversation sau khi cập nhật, theo góc nhìn người gọi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/conversations/{conversationId}/seen": {
       "patch": {
         "tags": [
@@ -1937,6 +2010,102 @@
         }
       }
     },
+    "/messages/{messageId}/reactions": {
+      "put": {
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Thả hoặc gỡ một biểu cảm",
+        "description": "TOGGLE, không phải add/remove: thao tác của người dùng là bấm vào một chip, và một client không đồng bộ có thể tưởng mình chưa thả trong khi đã thả rồi. `emoji` phải nằm trong bộ cố định — nếu cho tự do, field này thành một ô text tuỳ ý gắn lên tin nhắn của người khác. Đây là bản dự phòng của socket event `reaction:toggle`; cả hai dùng chung service.",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "6a83cfd55df7471cac7f192a"
+            },
+            "description": "Id tin nhắn"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "emoji"
+                ],
+                "properties": {
+                  "emoji": {
+                    "type": "string",
+                    "enum": [
+                      "👍",
+                      "❤️",
+                      "😂",
+                      "😮",
+                      "😢",
+                      "🙏"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tổng hợp biểu cảm sau khi đổi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversationId": {
+                      "type": "string"
+                    },
+                    "messageId": {
+                      "type": "string"
+                    },
+                    "reactions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ReactionGroup"
+                      }
+                    },
+                    "active": {
+                      "type": "boolean",
+                      "description": "`true` nếu vừa thả, `false` nếu vừa gỡ"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`MESSAGE_DELETED` hoặc `TOO_MANY_REACTIONS`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/messages/{messageId}": {
       "patch": {
         "tags": [
@@ -2420,7 +2589,18 @@
             "nullable": true
           },
           "pinned": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Riêng của người gọi"
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "Riêng của người gọi"
+          },
+          "mutedUntil": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Riêng của người gọi. Mốc đã qua được server lọc thành `null`."
           },
           "seenBy": {
             "type": "array",
@@ -2636,6 +2816,13 @@
               }
             }
           },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReactionGroup"
+            },
+            "description": "Đã gom theo emoji ở server. Tin nhắn đã xoá luôn trả mảng rỗng."
+          },
           "clientMessageId": {
             "type": "string",
             "nullable": true
@@ -2663,6 +2850,30 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "ReactionGroup": {
+        "type": "object",
+        "description": "Một emoji và số lượt thả. Server gom sẵn thay vì trả mảng thô: một tin nhắn trong nhóm đông có thể có hàng trăm lượt, và client chỉ cần biết emoji nào, bao nhiêu lượt, mình đã thả chưa.",
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "enum": [
+              "👍",
+              "❤️",
+              "😂",
+              "😮",
+              "😢",
+              "🙏"
+            ]
+          },
+          "count": {
+            "type": "integer"
+          },
+          "reactedByMe": {
+            "type": "boolean",
+            "description": "Chỉ có ở response HTTP. Bản broadcast qua socket cố tình bỏ field này vì nó theo từng người xem."
           }
         }
       }

@@ -47,7 +47,11 @@ export interface Conversation {
   myRole: GroupRole | null;
   /** @deprecated thay bằng `participants[].lastReadAt` */
   seenBy: string[];
+  /** Riêng của người đang xem — không phải trạng thái của cả cuộc trò chuyện. */
   pinned: boolean;
+  archived: boolean;
+  /** Do server lọc: mốc đã qua trả về `null`, client không tự so sánh đồng hồ. */
+  mutedUntil: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,6 +81,24 @@ export interface ReplyToSnapshot {
   kindSnapshot: MessageKind | null;
 }
 
+/** Bộ biểu cảm cố định, khớp `REACTION_EMOJIS` ở backend. */
+export const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
+
+export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
+
+/**
+ * Biểu cảm đã được server gom theo emoji.
+ *
+ * `reactedByMe` chỉ có trong response HTTP và trong state của client — bản
+ * broadcast qua socket cố tình bỏ nó, vì đó là giá trị theo từng người xem và một
+ * payload dùng chung sẽ gán cờ của người vừa bấm cho cả room.
+ */
+export interface ReactionGroup {
+  emoji: ReactionEmoji;
+  count: number;
+  reactedByMe: boolean;
+}
+
 export interface SystemEvent {
   type: string;
   actorId: string | null;
@@ -100,6 +122,8 @@ export interface Message {
   kind: MessageKind;
   content: string | null;
   attachments: Attachment[];
+  /** Tin nhắn đã xoá luôn là mảng rỗng — server không trả biểu cảm của bia mộ. */
+  reactions: ReactionGroup[];
   replyTo: ReplyToSnapshot | null;
   systemEvent?: SystemEvent | null;
   createdAt: string;
