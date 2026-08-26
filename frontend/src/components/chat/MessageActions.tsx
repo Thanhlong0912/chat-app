@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import ConfirmDialog from "../group/ConfirmDialog";
+import ReactionPicker from "./ReactionPicker";
 
 /** Khớp với EDIT_WINDOW_MS phía server. */
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
@@ -55,9 +56,20 @@ const MessageActions = ({
   return (
     <>
       <div
-        className="flex items-center gap-0.5 opacity-0 transition-smooth focus-within:opacity-100 group-hover/message:opacity-100"
-        // Bàn phím: các nút vẫn focus được, và focus-within làm chúng hiện ra.
+        /*
+         * Hiện SẴN trên mobile; chỉ ẩn-hiện theo hover từ `md` trở lên.
+         *
+         * Thiết bị cảm ứng không có hover, nên với quy tắc `group-hover` thuần
+         * trước đây thì trả lời, sửa, xoá — và nay cả thả biểu cảm — không với tới
+         * được trên điện thoại. Bàn phím vẫn dùng `focus-within` như cũ.
+         */
+        className="flex items-center gap-0.5 transition-smooth md:opacity-0 md:focus-within:opacity-100 md:group-hover/message:opacity-100"
       >
+        <ReactionPicker
+          conversationId={conversation._id}
+          messageId={message._id}
+        />
+
         <Button
           variant="ghost"
           size="icon"

@@ -4,6 +4,7 @@ import {
   deleteMessage,
   editMessage,
   findOrCreateDirectConversation,
+  toggleReaction,
 } from "../services/messageService.js";
 import {
   MAX_IMAGE_BYTES,
@@ -70,6 +71,20 @@ export const patchMessage = async (req, res) => {
   });
 
   return res.status(200).json({ message });
+};
+
+/**
+ * Đường dự phòng HTTP cho `reaction:toggle`, giữ cho tính năng vẫn dùng được khi
+ * socket đứt — cùng cách `PATCH /seen` là dự phòng cho `read:advance`.
+ */
+export const putReaction = async (req, res) => {
+  const result = await toggleReaction({
+    messageId: req.params.messageId,
+    actor: req.user,
+    emoji: req.body.emoji,
+  });
+
+  return res.status(200).json(result);
 };
 
 export const removeMessage = async (req, res) => {

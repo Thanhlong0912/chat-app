@@ -127,6 +127,22 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
   },
 
+  /**
+   * Thả biểu cảm qua socket.
+   *
+   * Không đợi ack, khác với `sendMessage`: store đã vẽ lạc quan rồi, và bản
+   * broadcast `reaction:updated` (server phát cho cả room, kể cả người bấm) là
+   * nguồn chốt lại. Chờ ack ở đây chỉ thêm một đường cập nhật thứ hai cho cùng một
+   * dữ liệu. Trả `false` khi socket đứt để chỗ gọi fallback sang HTTP.
+   */
+  toggleReaction: (messageId, emoji) => {
+    const socket = get().socket;
+    if (!socket?.connected) return false;
+
+    socket.emit("reaction:toggle", { messageId, emoji });
+    return true;
+  },
+
   setAway: (away) => {
     const socket = get().socket;
     if (!socket?.connected) return;
@@ -255,6 +271,15 @@ function registerListeners(socket: AppSocket, set: Setter, get: Getter) {
     useChatStore.getState().removeMessage(conversationId, messageId);
   });
 
+  socket.on(
+    "reaction:updated",
+    ({ conversationId, messageId, reactions, actorId, emoji, active }) => {
+      useChatStore
+        .getState()
+        .applyReaction(conversationId, messageId, reactions, actorId, emoji, active);
+    },
+  );
+
   // --- Conversation ---
 
   socket.on("conversation:created", ({ conversation }) => {
@@ -338,6 +363,18 @@ function notifyIncoming(message: Message, conversationId: string) {
 
   const preferences = me.preferences;
   const conversation = chat.conversationsById[conversationId];
+
+  /*
+   * Tắt thông báo của riêng cuộc trò chuyện này.
+   *
+   * Chặn ở đây, TRƯỚC cả ba tầng bên dưới, nên tắt thông báo im lặng thật sự —
+   * không toast, không thông báo trình duyệt. Badge chưa đọc thì vẫn chạy: tắt
+   * thông báo nghĩa là "đừng làm phiền tôi", không phải "giấu tin nhắn của tôi".
+   *
+   * `mutedUntil` đã được server lọc bỏ mốc hết hạn, nên chỉ cần kiểm tra có giá
+   * trị hay không — client không tự so sánh với đồng hồ máy mình.
+   */
+  if (conversation?.mutedUntil) return;
 
   const title =
     conversation?.type === "group"

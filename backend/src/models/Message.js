@@ -46,6 +46,45 @@ const replyToSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/**
+ * Bộ biểu cảm được phép, cố định.
+ *
+ * Cố tình KHÔNG cho emoji tự do: field này là chuỗi do client gửi lên, nên nếu
+ * không có allowlist thì nó trở thành một ô text tuỳ ý gắn vào tin nhắn của người
+ * khác — và mỗi giá trị lạ lại tạo thêm một nhóm trong `serializeMessage`, nên
+ * một client cố tình có thể thổi payload của mọi trang tin nhắn lên.
+ */
+export const REACTION_EMOJIS = Object.freeze(["👍", "❤️", "😂", "😮", "😢", "🙏"]);
+
+/**
+ * Trần số biểu cảm trên MỘT tin nhắn.
+ *
+ * Document MongoDB có trần cứng 16MB, và mảng lồng trong document lớn dần sẽ làm
+ * chậm mọi lượt đọc trang tin nhắn — không chỉ tin nhắn đó. Trần này ứng với
+ * `MAX_GROUP_MEMBERS × số emoji`, tức là ai cũng thả được mọi biểu cảm.
+ */
+export const MAX_REACTIONS_PER_MESSAGE = 600;
+
+/**
+ * Một lượt thả biểu cảm. Là subdocument chứ không phải collection riêng.
+ *
+ * Cùng lý do với `replyTo`: một collection riêng bắt mỗi trang 50 tin nhắn phải
+ * thêm một lượt $lookup chỉ để đếm biểu cảm. Nhúng vào đây thì trang tin nhắn
+ * không tốn thêm I/O nào, và `{emoji, userId}` chỉ vài chục byte mỗi lượt.
+ */
+const reactionSchema = new mongoose.Schema(
+  {
+    emoji: { type: String, required: true, enum: REACTION_EMOJIS },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const systemEventSchema = new mongoose.Schema(
   {
     type: { type: String, enum: SYSTEM_EVENTS },
@@ -93,6 +132,15 @@ const messageSchema = new mongoose.Schema(
     clientMessageId: {
       type: String,
       maxlength: 64,
+    },
+    /**
+     * `default: undefined` chứ không phải `[]`: một mảng rỗng mặc định sẽ ghi
+     * thêm một field vào MỌI tin nhắn, kể cả tin không ai thả biểu cảm — cùng lý
+     * do đã dùng cho `attachments`.
+     */
+    reactions: {
+      type: [reactionSchema],
+      default: undefined,
     },
     editedAt: { type: Date, default: null },
     // Xoá mềm: giữ lại bản ghi để chuỗi trả lời và mốc thời gian không bị hổng.

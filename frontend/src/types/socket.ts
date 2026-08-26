@@ -1,4 +1,4 @@
-import type { Attachment, Conversation, Message } from "./chat";
+import type { Attachment, Conversation, Message, ReactionEmoji, ReactionGroup } from "./chat";
 
 /**
  * Hợp đồng socket, bản song ánh của `backend/src/socket/events.js`.
@@ -67,6 +67,23 @@ export interface TypingUpdatePayload {
   isTyping: boolean;
 }
 
+/**
+ * Bản broadcast của một lượt thả biểu cảm.
+ *
+ * KHÔNG mang `reactedByMe`: đó là giá trị theo từng người xem, và một payload dùng
+ * chung sẽ gán cờ của người vừa bấm cho cả room. Thay vào đó có `actorId` và
+ * `active`, đủ để mỗi client tự đặt cờ cho chính mình — một lượt broadcast thay vì
+ * N lượt gửi riêng.
+ */
+export interface ReactionUpdatedPayload {
+  conversationId: string;
+  messageId: string;
+  reactions: { emoji: ReactionEmoji; count: number }[];
+  actorId: string;
+  emoji: ReactionEmoji;
+  active: boolean;
+}
+
 export interface ConversationRemovedPayload {
   conversationId: string;
   reason: "left" | "removed" | "deleted";
@@ -114,6 +131,7 @@ export interface ServerToClientEvents {
   "message:new": (payload: MessageNewPayload) => void;
   "message:updated": (payload: { message: Message }) => void;
   "message:deleted": (payload: MessageDeletedPayload) => void;
+  "reaction:updated": (payload: ReactionUpdatedPayload) => void;
   "conversation:created": (payload: { conversation: Conversation }) => void;
   "conversation:updated": (payload: { conversation: Conversation }) => void;
   "conversation:removed": (payload: ConversationRemovedPayload) => void;
@@ -139,6 +157,10 @@ export interface ClientToServerEvents {
     ack?: (res: Ack<{ message: Message }>) => void,
   ) => void;
   "message:delete": (payload: { messageId: string }, ack?: (res: Ack) => void) => void;
+  "reaction:toggle": (
+    payload: { messageId: string; emoji: ReactionEmoji },
+    ack?: (res: Ack<{ reactions: ReactionGroup[]; active: boolean }>) => void,
+  ) => void;
   "typing:start": (payload: { conversationId: string }) => void;
   "typing:stop": (payload: { conversationId: string }) => void;
   "read:advance": (
@@ -163,6 +185,7 @@ export const SERVER_EVENT_NAMES = [
   "message:new",
   "message:updated",
   "message:deleted",
+  "reaction:updated",
   "conversation:created",
   "conversation:updated",
   "conversation:removed",
@@ -179,6 +202,7 @@ export const CLIENT_EVENT_NAMES = [
   "message:send",
   "message:edit",
   "message:delete",
+  "reaction:toggle",
   "typing:start",
   "typing:stop",
   "read:advance",

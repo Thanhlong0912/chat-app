@@ -24,6 +24,24 @@ const readCount = (counts, userId) => {
   return counts[String(userId)] ?? 0;
 };
 
+/**
+ * `mutedUntil` của chính người đang xem, đã bỏ qua mốc đã hết hạn.
+ *
+ * Lọc hết hạn ở ĐÂY chứ không để client tự so sánh: đồng hồ máy client có thể sai
+ * lệch hàng giờ, và một chiếc máy chạy sớm sẽ tự bật lại thông báo mà người dùng
+ * vẫn tưởng đang tắt. Server là nguồn thời gian duy nhất.
+ */
+const readMutedUntil = (plain, viewerId) => {
+  const participant = (plain.participants ?? []).find(
+    (p) => String(p.userId?._id ?? p.userId) === String(viewerId),
+  );
+
+  const until = participant?.mutedUntil;
+  if (!until) return null;
+
+  return new Date(until).getTime() > Date.now() ? until : null;
+};
+
 const shapeParticipant = (p) => {
   const user = p.userId;
   const populated = user && typeof user === "object" && user.displayName !== undefined;
@@ -84,7 +102,17 @@ export function serializeConversation(doc, { viewerId } = {}) {
     myRole: viewerId ? getRole(plain, viewerId) : null,
     // @deprecated — thay bằng participant.lastReadAt. Còn ghi thêm một release.
     seenBy: (plain.seenBy ?? []).map((u) => String(u?._id ?? u)),
+    /*
+     * Ghim / lưu trữ / tắt thông báo đều là trạng thái THEO TỪNG NGƯỜI, nên chúng
+     * được rút gọn thành boolean cho đúng người đang xem thay vì trả cả mảng id.
+     * Trả mảng sẽ để lộ ai đã ghim hay lưu trữ cuộc trò chuyện — thông tin riêng
+     * tư của người khác mà client không có lý do gì để biết.
+     */
     pinned: viewerId ? (plain.pinnedBy ?? []).some((id) => String(id) === String(viewerId)) : false,
+    archived: viewerId
+      ? (plain.archivedBy ?? []).some((id) => String(id) === String(viewerId))
+      : false,
+    mutedUntil: viewerId ? readMutedUntil(plain, viewerId) : null,
     createdAt: plain.createdAt,
     updatedAt: plain.updatedAt,
   };

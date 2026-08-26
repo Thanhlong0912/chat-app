@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import Conversation from "../models/Conversation.js";
-import Message from "../models/Message.js";
+import Message, { MAX_REACTIONS_PER_MESSAGE } from "../models/Message.js";
 import { serializeMessage } from "../serializers/message.js";
 import { serializeConversation } from "../serializers/conversation.js";
 import {
@@ -324,6 +324,119 @@ export async function deleteMessage({ messageId, actor }) {
 
   return serializeMessage(message, { viewerId: actor._id });
 }
+
+/**
+ * Bật/tắt một biểu cảm của người gọi trên một tin nhắn.
+ *
+ * Là TOGGLE chứ không phải hai endpoint add/remove: thao tác của người dùng là
+ * bấm vào một chip, và một client không đồng bộ có thể tưởng mình chưa thả trong
+ * khi đã thả rồi. Toggle luôn hội tụ về đúng một trạng thái; add/remove thì lệch.
+ *
+ * Dùng update operator nguyên tử thay vì load → sửa → save. Thả biểu cảm là thao
+ * tác nhiều người bấm cùng lúc trên cùng một document, và vòng đọc-ghi sẽ nuốt
+ * mất lượt của người khác: hai người thả cùng lúc, người lưu sau ghi đè bản đọc
+ * cũ của mình và lượt của người kia biến mất.
+ */
+export async function toggleReaction({ messageId, actor, emoji }) {
+  const { message, conversation } = await loadMessageForMutation(messageId, actor._id);
+
+  if (message.deletedAt) {
+    throw badRequest("MESSAGE_DELETED", "Không thể thả biểu cảm lên tin nhắn đã xoá");
+  }
+
+  const filter = { _id: message._id, deletedAt: null };
+
+  /*
+   * Thử gỡ trước. `modifiedCount` cho biết người này đã thả emoji đó hay chưa —
+   * không cần đọc riêng một lượt, nên không có khoảng hở giữa kiểm tra và ghi.
+   *
+   * `timestamps: false` là BẮT BUỘC, không phải tối ưu. Schema bật `timestamps`,
+   * nên Mongoose tự thêm `$set: {updatedAt}` vào mọi update — khiến
+   * `modifiedCount` luôn là 1 kể cả khi `$pull` không khớp gì, và toggle không bao
+   * giờ vào được nhánh thả. Tắt đi cũng đúng về mặt ngữ nghĩa: thả biểu cảm không
+   * phải là sửa tin nhắn, nên không nên đụng vào `updatedAt`.
+   */
+  const pulled = await Message.updateOne(
+    filter,
+    { $pull: { reactions: { emoji, userId: actor._id } } },
+    { timestamps: false },
+  );
+
+  const active = pulled.modifiedCount === 0;
+
+  if (active) {
+    const pushed = await Message.updateOne(
+      {
+        ...filter,
+        // Trần được ép trong CHÍNH câu lệnh ghi, không phải bằng một lượt đọc
+        // trước đó — nếu không, đủ nhiều lượt thả đồng thời vẫn vượt qua được.
+        $expr: {
+          $lt: [{ $size: { $ifNull: ["$reactions", []] } }, MAX_REACTIONS_PER_MESSAGE],
+        },
+      },
+      { $push: { reactions: { emoji, userId: actor._id, createdAt: new Date() } } },
+      // Cùng lý do: nếu không tắt, `modifiedCount` là 1 ngay cả khi guard `$expr`
+      // chặn lượt thả, nên vượt trần sẽ trôi qua im lặng.
+      { timestamps: false },
+    );
+
+    if (pushed.modifiedCount === 0) {
+      throw badRequest("TOO_MANY_REACTIONS", "Tin nhắn này đã đạt giới hạn biểu cảm");
+    }
+  }
+
+  const updated = await Message.findById(message._id).select("reactions").lean();
+
+  /*
+   * Payload phát đi KHÔNG mang `reactedByMe`.
+   *
+   * Đó là giá trị theo từng người xem, và một bản broadcast dùng chung sẽ gán cờ
+   * của người vừa bấm cho tất cả mọi người trong room — đúng lỗi mà `deleteMessage`
+   * phải phát từng người một để tránh. Ở đây rẻ hơn nhiều: gửi kèm `actorId` và
+   * `active`, rồi client tự đặt cờ cho chính mình. Một lượt broadcast, không phải
+   * N lượt.
+   */
+  const counts = countReactions(updated?.reactions ?? []);
+
+  getIo()
+    ?.to(conversationRoom(message.conversationId))
+    .emit(SERVER_EVENTS.REACTION_UPDATED, {
+      conversationId: String(message.conversationId),
+      messageId: String(message._id),
+      reactions: counts,
+      actorId: String(actor._id),
+      emoji,
+      active,
+    });
+
+  return {
+    conversationId: String(message.conversationId),
+    messageId: String(message._id),
+    // Người gọi thì biết chắc cờ của mình, nên trả kèm luôn cho đường HTTP.
+    reactions: counts.map((group) => ({
+      ...group,
+      reactedByMe: group.emoji === emoji ? active : hasReacted(updated?.reactions, group.emoji, actor._id),
+    })),
+    active,
+    conversationType: conversation.type,
+  };
+}
+
+/** Gom `[{emoji, userId}]` thành `[{emoji, count}]`, giữ thứ tự thả đầu tiên. */
+const countReactions = (reactions) => {
+  const groups = new Map();
+
+  for (const reaction of reactions) {
+    groups.set(reaction.emoji, (groups.get(reaction.emoji) ?? 0) + 1);
+  }
+
+  return [...groups].map(([emoji, count]) => ({ emoji, count }));
+};
+
+const hasReacted = (reactions, emoji, userId) =>
+  (reactions ?? []).some(
+    (r) => r.emoji === emoji && String(r.userId) === String(userId),
+  );
 
 /**
  * Tìm hoặc tạo conversation 1-1 giữa hai người.
