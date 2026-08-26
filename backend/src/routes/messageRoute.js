@@ -2,6 +2,7 @@ import express from "express";
 
 import {
   patchMessage,
+  putReaction,
   removeMessage,
   sendDirectMessage,
   sendGroupMessage,
@@ -14,6 +15,7 @@ import {
   messageIdParamSchema,
   sendDirectMessageSchema,
   sendGroupMessageSchema,
+  toggleReactionSchema,
 } from "../schemas/messageSchemas.js";
 
 const router = express.Router();
@@ -42,5 +44,8 @@ router.post(
  */
 router.patch("/:messageId", validate(editMessageSchema), patchMessage);
 router.delete("/:messageId", validate(messageIdParamSchema), removeMessage);
+
+// Cùng lý do như trên: quyền được kiểm trong service, sau khi nạp được tin nhắn.
+router.put("/:messageId/reactions", validate(toggleReactionSchema), putReaction);
 
 export default router;

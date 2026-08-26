@@ -16,6 +16,7 @@ import NewGroupChatModal from "../chat/NewGroupChatModal";
 import GroupChatList from "../chat/GroupChatList";
 import AddFriendModal from "../chat/AddFriendModal";
 import DirectMessageList from "../chat/DirectMessageList";
+import ArchivedList from "../chat/ArchivedList";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import ConversationSkeleton from "../skeleton/ConversationSkeleton";
@@ -103,6 +104,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {convoLoading ? <ConversationSkeleton /> : <DirectMessageList />}
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Sau cả hai danh sách, và tự ẩn khi chưa lưu trữ gì. */}
+        {!convoLoading && <ArchivedList />}
       </SidebarContent>
 
       {/* Footer */}

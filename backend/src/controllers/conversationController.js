@@ -12,12 +12,31 @@ import { announcePresenceAmong } from "../socket/handlers/presence.js";
 import { MAX_GROUP_MEMBERS } from "../services/groupService.js";
 import { decodeCursor, encodeCursor, newerThan, olderThan } from "../utils/cursor.js";
 import { advanceRead } from "../services/readReceiptService.js";
+import { updateConversationSettings } from "../services/conversationSettingsService.js";
 import { serializeMessages } from "../serializers/message.js";
 import {
   serializeConversation,
   serializeConversations,
 } from "../serializers/conversation.js";
 import { badRequest } from "../utils/errors.js";
+
+/**
+ * Ghim / lưu trữ / tắt thông báo cho chính người gọi.
+ *
+ * `req.conversation` do `requireMembership` gắn vào, nên tới đây đã chắc chắn
+ * người gọi là thành viên — không ai ghim được cuộc trò chuyện họ không tham gia.
+ */
+export const patchConversationSettings = async (req, res) => {
+  const conversation = await updateConversationSettings({
+    conversation: req.conversation,
+    userId: req.user._id,
+    pinned: req.body.pinned,
+    archived: req.body.archived,
+    muteMinutes: req.body.muteMinutes,
+  });
+
+  return res.status(200).json({ conversation });
+};
 
 export const createConversation = async (req, res) => {
   const { type, name } = req.body;

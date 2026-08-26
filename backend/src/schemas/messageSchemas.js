@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { messageContent, objectId } from "./common.js";
+import { REACTION_EMOJIS } from "../models/Message.js";
 
 /** Chỉ cho phép http(s): `z.string().url()` chấp nhận cả `javascript:` và `data:`. */
 const mediaUrl = z
@@ -88,6 +89,25 @@ export const socketEditMessageSchema = z.object({
 
 export const socketDeleteMessageSchema = z.object({
   messageId: objectId,
+});
+
+/**
+ * Biểu cảm phải nằm trong bộ cố định.
+ *
+ * `z.enum` trên cùng hằng số mà model dùng, nên hai lớp không thể lệch nhau: thêm
+ * một emoji chỉ cần sửa `REACTION_EMOJIS` một chỗ.
+ */
+const reactionEmoji = z.enum(REACTION_EMOJIS);
+
+export const toggleReactionSchema = {
+  params: z.object({ messageId: objectId }),
+  body: z.object({ emoji: reactionEmoji }),
+};
+
+/** Payload của socket `reaction:toggle`. */
+export const socketToggleReactionSchema = z.object({
+  messageId: objectId,
+  emoji: reactionEmoji,
 });
 
 /** Payload của socket `message:send`. Validate bằng zod như route HTTP. */

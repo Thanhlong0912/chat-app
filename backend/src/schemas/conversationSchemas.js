@@ -38,6 +38,26 @@ export const createConversationSchema = {
     }),
 };
 
+/**
+ * Ghim / lưu trữ / tắt thông báo.
+ *
+ * Cả ba đều optional và độc lập, nên client gửi được đúng thứ nó đổi thay vì phải
+ * gửi lại nguyên trạng thái — tránh hai tab ghi đè lẫn nhau bằng dữ liệu cũ.
+ */
+export const updateConversationSettingsSchema = {
+  params: conversationIdParam,
+  body: z
+    .object({
+      pinned: z.boolean().optional(),
+      archived: z.boolean().optional(),
+      // `null` nghĩa là bật lại thông báo. Trần 1 năm được ép lại ở service.
+      muteMinutes: z.number().int().positive().max(525_600).nullable().optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, {
+      message: "Cần ít nhất một tuỳ chọn để cập nhật",
+    }),
+};
+
 export const getMessagesSchema = {
   params: conversationIdParam,
   query: z.object({

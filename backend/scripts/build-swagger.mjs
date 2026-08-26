@@ -11,6 +11,9 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+// Đọc thẳng từ model, nên tài liệu không thể liệt kê một bộ emoji khác với bộ
+// mà server thực sự chấp nhận.
+import { REACTION_EMOJIS } from "../src/models/Message.js";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "swagger.json");
 
@@ -537,6 +540,44 @@ const spec = {
       },
     },
 
+    "/conversations/{conversationId}/settings": {
+      patch: {
+        tags: ["Conversations"],
+        summary: "Ghim, lưu trữ, tắt thông báo",
+        description: [
+          "Ba tuỳ chọn RIÊNG CỦA TỪNG NGƯỜI: một người lưu trữ nhóm không làm nhóm đó biến",
+          "mất khỏi hộp thư của người khác. Vì vậy kết quả chỉ được phát về các thiết bị của",
+          "chính người gọi, không phát ra room của conversation.",
+          "Cả ba field đều optional và độc lập — client gửi đúng thứ nó đổi, nên hai tab",
+          "không ghi đè lẫn nhau bằng trạng thái cũ.",
+        ].join(" "),
+        parameters: [conversationId],
+        requestBody: body({
+          type: "object",
+          properties: {
+            pinned: { type: "boolean" },
+            archived: { type: "boolean" },
+            muteMinutes: {
+              type: "integer",
+              nullable: true,
+              description: "`null` để bật lại thông báo. Trần 1 năm.",
+            },
+          },
+        }),
+        responses: {
+          200: {
+            description: "Conversation sau khi cập nhật, theo góc nhìn người gọi",
+            ...json({
+              type: "object",
+              properties: { conversation: ref("Conversation") },
+            }),
+          },
+          ...validated,
+          ...member,
+        },
+      },
+    },
+
     "/conversations/{conversationId}/seen": {
       patch: {
         tags: ["Conversations"],
@@ -837,6 +878,44 @@ const spec = {
       },
     },
 
+    "/messages/{messageId}/reactions": {
+      put: {
+        tags: ["Messages"],
+        summary: "Thả hoặc gỡ một biểu cảm",
+        description: [
+          "TOGGLE, không phải add/remove: thao tác của người dùng là bấm vào một chip, và",
+          "một client không đồng bộ có thể tưởng mình chưa thả trong khi đã thả rồi.",
+          "`emoji` phải nằm trong bộ cố định — nếu cho tự do, field này thành một ô text",
+          "tuỳ ý gắn lên tin nhắn của người khác.",
+          "Đây là bản dự phòng của socket event `reaction:toggle`; cả hai dùng chung service.",
+        ].join(" "),
+        parameters: [messageIdParam],
+        requestBody: body({
+          type: "object",
+          required: ["emoji"],
+          properties: {
+            emoji: { type: "string", enum: [...REACTION_EMOJIS] },
+          },
+        }),
+        responses: {
+          200: {
+            description: "Tổng hợp biểu cảm sau khi đổi",
+            ...json({
+              type: "object",
+              properties: {
+                conversationId: { type: "string" },
+                messageId: { type: "string" },
+                reactions: { type: "array", items: ref("ReactionGroup") },
+                active: { type: "boolean", description: "`true` nếu vừa thả, `false` nếu vừa gỡ" },
+              },
+            }),
+          },
+          400: { description: "`MESSAGE_DELETED` hoặc `TOO_MANY_REACTIONS`", ...json(ref("Error")) },
+          ...member,
+        },
+      },
+    },
+
     "/messages/{messageId}": {
       patch: {
         tags: ["Messages"],
@@ -1043,7 +1122,14 @@ const spec = {
             description: "Số chưa đọc của riêng người gọi — client khỏi phải tra map bằng id của chính mình",
           },
           myRole: { type: "string", enum: ["owner", "admin", "member"], nullable: true },
-          pinned: { type: "boolean" },
+          pinned: { type: "boolean", description: "Riêng của người gọi" },
+          archived: { type: "boolean", description: "Riêng của người gọi" },
+          mutedUntil: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+            description: "Riêng của người gọi. Mốc đã qua được server lọc thành `null`.",
+          },
           seenBy: {
             type: "array",
             items: { type: "string" },
@@ -1147,6 +1233,12 @@ const spec = {
               meta: { type: "object", nullable: true },
             },
           },
+          reactions: {
+            type: "array",
+            items: ref("ReactionGroup"),
+            description:
+              "Đã gom theo emoji ở server. Tin nhắn đã xoá luôn trả mảng rỗng.",
+          },
           clientMessageId: { type: "string", nullable: true },
           editedAt: { type: "string", format: "date-time", nullable: true },
           deleted: { type: "boolean" },
@@ -1154,6 +1246,24 @@ const spec = {
           isOwn: { type: "boolean" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+
+      ReactionGroup: {
+        type: "object",
+        description: [
+          "Một emoji và số lượt thả. Server gom sẵn thay vì trả mảng thô: một tin nhắn",
+          "trong nhóm đông có thể có hàng trăm lượt, và client chỉ cần biết emoji nào,",
+          "bao nhiêu lượt, mình đã thả chưa.",
+        ].join(" "),
+        properties: {
+          emoji: { type: "string", enum: [...REACTION_EMOJIS] },
+          count: { type: "integer" },
+          reactedByMe: {
+            type: "boolean",
+            description:
+              "Chỉ có ở response HTTP. Bản broadcast qua socket cố tình bỏ field này vì nó theo từng người xem.",
+          },
         },
       },
     },

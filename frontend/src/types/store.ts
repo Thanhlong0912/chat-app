@@ -1,5 +1,5 @@
 import type { Socket } from "socket.io-client";
-import type { Conversation, Message } from "./chat";
+import type { Conversation, Message, ReactionEmoji } from "./chat";
 import type { Friend, FriendRequest, User, UserPreferences } from "./user";
 import type {
   ClientToServerEvents,
@@ -103,6 +103,33 @@ export interface ChatState {
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
 
+  /** Thả / gỡ biểu cảm. Cập nhật lạc quan rồi đối chiếu với server. */
+  toggleReaction: (
+    conversationId: string,
+    messageId: string,
+    emoji: ReactionEmoji
+  ) => Promise<void>;
+  /**
+   * Áp một lượt thả biểu cảm nhận từ socket.
+   *
+   * Nhận `actorId` chứ không nhận `reactedByMe`: bản broadcast dùng chung cho cả
+   * room, nên cờ "mình đã thả chưa" phải được suy ra ở client cho từng người.
+   */
+  applyReaction: (
+    conversationId: string,
+    messageId: string,
+    reactions: { emoji: ReactionEmoji; count: number }[],
+    actorId: string,
+    emoji: ReactionEmoji,
+    active: boolean
+  ) => void;
+
+  /** Ghim / lưu trữ / tắt thông báo, riêng của người đang đăng nhập. */
+  updateConversationSettings: (
+    conversationId: string,
+    settings: { pinned?: boolean; archived?: boolean; muteMinutes?: number | null }
+  ) => Promise<void>;
+
   /** Đồng bộ hoá: thêm hoặc thay tin nhắn đến từ socket/HTTP. */
   upsertMessage: (message: Message) => void;
   removeMessage: (conversationId: string, messageId: string) => void;
@@ -165,6 +192,8 @@ export interface SocketState {
   advanceRead: (conversationId: string, lastReadMessageId?: string) => void;
   /** Gửi qua socket; trả về false nếu socket không dùng được (client sẽ fallback HTTP). */
   sendMessage: (input: SendMessageInput) => Promise<Message | null>;
+  /** Thả biểu cảm qua socket; `false` nghĩa là chỗ gọi phải fallback sang HTTP. */
+  toggleReaction: (messageId: string, emoji: ReactionEmoji) => boolean;
   setAway: (away: boolean) => void;
 }
 

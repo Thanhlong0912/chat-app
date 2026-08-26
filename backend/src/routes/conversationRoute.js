@@ -5,6 +5,7 @@ import {
   getMessages,
   getMessagesSince,
   markAsSeen,
+  patchConversationSettings,
 } from "../controllers/conversationController.js";
 import {
   deleteConversation,
@@ -31,6 +32,7 @@ import {
   getMessagesSchema,
   getMessagesSinceSchema,
   markAsSeenSchema,
+  updateConversationSettingsSchema,
 } from "../schemas/conversationSchemas.js";
 import {
   addMembersSchema,
@@ -73,6 +75,15 @@ router.get(
   validate(getMessagesSinceSchema),
   requireMembership(),
   getMessagesSince,
+);
+
+// Tuỳ chọn riêng của từng người. Chỉ cần là thành viên — không phải quản trị,
+// vì ghim/lưu trữ/tắt thông báo không ảnh hưởng tới ai khác.
+router.patch(
+  "/:conversationId/settings",
+  validate(updateConversationSettingsSchema),
+  requireMembership(),
+  patchConversationSettings,
 );
 
 router.patch(
