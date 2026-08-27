@@ -78,3 +78,69 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+  deploy:
+    name: Deploy production
+    runs-on: ubuntu-latest
+
+    # Vercel vẫn nhận push từ repo này — preview cho mọi branch đều chạy bình
+    # thường — nhưng chưa bao giờ tự tạo deployment production cho main: xem lại
+    # lịch sử thì mọi bản production từ trước tới nay đều là `source=cli`, không
+    # có bản nào `source=git`. Cài đặt project nhìn đều đúng (createDeployments
+    # enabled, productionBranch main, không có ignore command), nên nguyên nhân
+    # nằm ở đâu đó không đọc được qua API.
+    #
+    # Đặt trigger ở đây thì nó nằm trong repo, có version, và ai cũng nhìn thấy —
+    # thay vì phải nhớ chạy tay `vercel --prod` sau mỗi lần merge.
+    #
+    # Chỉ chạy khi đã đẩy lên main và cả hai job kia xanh: không deploy thứ chưa
+    # qua test.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend]
+
+    env:
+      # Hai cái này không phải bí mật, chỉ là định danh — mở dashboard hay xem URL
+      # deployment là thấy. Chỉ VERCEL_TOKEN mới cần nằm trong Settings → Secrets.
+      VERCEL_ORG_ID: team_7EGwbxuzG2myqFmvgNymf0Jk
+      VERCEL_PROJECT_ID: prj_7fFlPQiFnpoHTyageFgv0oMOI7kM
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Thiếu token thì `vercel` báo một lỗi khó hiểu ở tận bước sau. Nói thẳng ra
+      # đây, kèm chỗ để đi lấy.
+      - name: Kiểm tra token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::Thiếu secret VERCEL_TOKEN. Tạo ở https://vercel.com/account/tokens rồi thêm vào Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Cài Vercel CLI
+        run: npm i -g vercel@latest
+
+      # Chạy từ gốc repo, KHÔNG cd vào frontend: `rootDirectory` (= frontend) nằm
+      # trong cài đặt project, Vercel tự áp dụng sau khi nhận source. Vào sẵn
+      # frontend thì nó lại đi tìm frontend/frontend.
+      #
+      # `--meta` để dashboard vẫn gắn được deployment với commit; deploy bằng CLI
+      # thì không tự có metadata git như bản `source=git`.
+      - name: Deploy lên production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -o pipefail
+
+          vercel deploy --prod --yes --token="$VERCEL_TOKEN" \
+            --meta githubCommitSha="$GITHUB_SHA" \
+            --meta githubCommitRef="${GITHUB_REF#refs/heads/}" \
+            --meta githubRepo="$GITHUB_REPOSITORY" \
+            | tee deployment-url.txt
+
+          echo "Production: $(tail -n1 deployment-url.txt)" >> "$GITHUB_STEP_SUMMARY"
