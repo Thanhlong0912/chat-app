@@ -21,8 +21,17 @@ export function describeError(error: unknown): string {
 
     if (body?.message) return body.message;
 
-    // Không có response nghĩa là request chưa từng đến được server.
-    if (!error.response) return "Không kết nối được tới server. Kiểm tra mạng và thử lại.";
+    /*
+     * Không có response nghĩa là request chưa từng đến được server.
+     *
+     * Nguyên nhân hay gặp nhất không phải mạng người dùng, mà là backend đang ngủ:
+     * nó chạy trên gói free của Render, không ai gọi trong ~15 phút thì tắt, và
+     * request đánh thức mất 20–50 giây. Câu cũ chỉ nói "kiểm tra mạng", nên người
+     * đọc đi kiểm tra đúng thứ không hỏng.
+     */
+    if (!error.response) {
+      return "Không kết nối được tới server. Có thể server đang khởi động hoặc mạng có vấn đề, thử lại sau giây lát.";
+    }
 
     return "Có lỗi xảy ra, vui lòng thử lại.";
   }

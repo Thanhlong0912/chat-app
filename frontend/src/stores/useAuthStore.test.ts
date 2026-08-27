@@ -2,7 +2,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { toast } from "sonner";
+import { AxiosError } from "axios";
 import { useAuthStore } from "./useAuthStore";
+import { describeError } from "@/lib/errors";
 
 const API = "http://localhost:5001/api";
 
@@ -120,9 +122,12 @@ describe("useAuthStore.refresh — phiên thật sự kết thúc", () => {
 
     await useAuthStore.getState().refresh();
 
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.stringContaining("Không kết nối được tới server"),
-    );
+    /*
+     * So bằng chính output của `describeError()` chứ không so chuỗi rời: câu chữ
+     * chỉ được có một chỗ ở. Ai sửa `errors.ts` thì test này đi theo, còn ai viết
+     * lại một bản gần giống trong store thì test này gãy.
+     */
+    expect(toast.error).toHaveBeenCalledWith(describeError(new AxiosError("Network Error")));
     expect(toast.error).not.toHaveBeenCalledWith(
       expect.stringContaining("Phiên đăng nhập đã hết hạn"),
     );

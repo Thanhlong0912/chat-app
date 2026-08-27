@@ -2,6 +2,7 @@ import { create } from "zustand";
 import axios from "axios";
 import { toast } from "sonner";
 import { authService } from "@/services/authService";
+import { describeError } from "@/lib/errors";
 import type { AuthState } from "@/types/store";
 import { persist } from "zustand/middleware";
 import { useChatStore } from "./useChatStore";
@@ -139,12 +140,21 @@ export const useAuthStore = create<AuthState>()(
              * hạn" là sai sự thật. Từ khi `ProtectedRoute` không chặn lần vẽ đầu
              * nữa, khách lần đầu đọc được đúng câu đó ngay trên màn hình đăng nhập,
              * dù chưa từng có phiên nào để mà hết hạn.
+             *
+             * Câu chữ để `describeError()` lo, đừng tự viết lại ở đây: nó đã là chỗ
+             * mô tả lỗi dùng chung của cả app (9 file khác gọi tới), nên hai bản
+             * gần-giống-nhau chỉ tổ lệch dần theo thời gian.
+             *
+             * Chỉ nhánh này thôi. Phiên hết hạn thật thì backend trả `{code}` không
+             * kèm `message`, mà `describeError()` gặp response không có message sẽ
+             * rơi về câu chung "Có lỗi xảy ra" — mất hẳn thông tin đáng giá nhất là
+             * "đăng nhập lại đi".
              */
             const serverUnreachable = isAxios && !error.response;
 
             toast.error(
               serverUnreachable
-                ? "Không kết nối được tới server. Server có thể đang khởi động, thử lại sau giây lát."
+                ? describeError(error)
                 : "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!"
             );
           }
