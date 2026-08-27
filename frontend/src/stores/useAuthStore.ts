@@ -124,13 +124,29 @@ export const useAuthStore = create<AuthState>()(
            * đỏ chẳng liên quan gì tới lỗi thật. (Dòng "Failed to load resource: 401"
            * của trình duyệt thì vẫn còn — log tầng mạng, JS không tắt được.)
            */
+          const isAxios = axios.isAxiosError<{ code?: string }>(error);
+
           const noSessionToExpire =
-            axios.isAxiosError<{ code?: string }>(error) &&
-            error.response?.data?.code === "NO_REFRESH_TOKEN";
+            isAxios && error.response?.data?.code === "NO_REFRESH_TOKEN";
 
           if (!noSessionToExpire) {
             console.error(error);
-            toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
+
+            /*
+             * Không có `response` nghĩa là request không tới được server: backend
+             * đang ngủ (gói free của Render mất 20–50 giây để tỉnh) hoặc mất mạng.
+             * Vẫn phải báo — im lặng ở đây giấu mất lỗi thật — nhưng "phiên đã hết
+             * hạn" là sai sự thật. Từ khi `ProtectedRoute` không chặn lần vẽ đầu
+             * nữa, khách lần đầu đọc được đúng câu đó ngay trên màn hình đăng nhập,
+             * dù chưa từng có phiên nào để mà hết hạn.
+             */
+            const serverUnreachable = isAxios && !error.response;
+
+            toast.error(
+              serverUnreachable
+                ? "Không kết nối được tới server. Server có thể đang khởi động, thử lại sau giây lát."
+                : "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!"
+            );
           }
 
           get().clearState();
