@@ -109,4 +109,22 @@ describe("useAuthStore.refresh — phiên thật sự kết thúc", () => {
 
     expect(toast.error).toHaveBeenCalled();
   });
+
+  /*
+   * Nhưng báo bằng câu đúng sự thật. Backend ngủ trên gói free của Render là
+   * chuyện thường ngày, và người đọc câu này có thể chưa từng đăng nhập bao giờ —
+   * nói với họ là "phiên đã hết hạn" vừa sai vừa khiến họ tưởng lỗi do mình.
+   */
+  it("nói là không kết nối được, không phải phiên hết hạn", async () => {
+    server.use(http.post(`${API}/auth/refresh`, () => HttpResponse.error()));
+
+    await useAuthStore.getState().refresh();
+
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining("Không kết nối được tới server"),
+    );
+    expect(toast.error).not.toHaveBeenCalledWith(
+      expect.stringContaining("Phiên đăng nhập đã hết hạn"),
+    );
+  });
 });
