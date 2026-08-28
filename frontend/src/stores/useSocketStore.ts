@@ -130,16 +130,27 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   /**
    * Thả biểu cảm qua socket.
    *
-   * Không đợi ack, khác với `sendMessage`: store đã vẽ lạc quan rồi, và bản
-   * broadcast `reaction:updated` (server phát cho cả room, kể cả người bấm) là
-   * nguồn chốt lại. Chờ ack ở đây chỉ thêm một đường cập nhật thứ hai cho cùng một
-   * dữ liệu. Trả `false` khi socket đứt để chỗ gọi fallback sang HTTP.
+   * KHÔNG chặn để chờ ack, khác với `sendMessage`: store đã vẽ lạc quan rồi, và
+   * bản broadcast `reaction:updated` (server phát cho cả room, kể cả người bấm) là
+   * nguồn chốt lại đường thành công. Trả `false` khi socket đứt để chỗ gọi fallback
+   * sang HTTP.
+   *
+   * Nhưng ack vẫn được TRUYỀN VÀO, chỉ để bắt đường thất bại. Bản trước bỏ hẳn ack,
+   * nên khi server từ chối (mất quyền trong nhóm, tin nhắn vừa bị xoá, vượt trần
+   * biểu cảm) thì không có event nào phát ra cả — không broadcast, không lỗi — và
+   * chip lạc quan nằm lại trên màn hình mãi mãi, ở một trạng thái server chưa bao
+   * giờ ghi nhận. Đường HTTP dự phòng luôn có rollback; đường socket thì không.
    */
-  toggleReaction: (messageId, emoji) => {
+  toggleReaction: (messageId, emoji, onFailure) => {
     const socket = get().socket;
     if (!socket?.connected) return false;
 
-    socket.emit("reaction:toggle", { messageId, emoji });
+    socket.emit("reaction:toggle", { messageId, emoji }, (res) => {
+      if (!res?.ok) {
+        onFailure?.(new Error(`Không thả được biểu cảm (${res?.code ?? "UNKNOWN"})`));
+      }
+    });
+
     return true;
   },
 

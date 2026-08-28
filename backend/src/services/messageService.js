@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import Conversation from "../models/Conversation.js";
-import Message, { MAX_REACTIONS_PER_MESSAGE } from "../models/Message.js";
+import Message, { MAX_REACTIONS_PER_MESSAGE, reactionOrder } from "../models/Message.js";
 import { serializeMessage } from "../serializers/message.js";
 import { serializeConversation } from "../serializers/conversation.js";
 import {
@@ -215,9 +215,31 @@ export async function editMessage({ messageId, actor, content }) {
   message.senderId = actor;
   const serialized = serializeMessage(message, { viewerId: actor._id });
 
-  getIo()
-    ?.to(conversationRoom(message.conversationId))
-    .emit(SERVER_EVENTS.MESSAGE_UPDATED, { message: serializeMessage(message) });
+  const io = getIo();
+
+  /*
+   * Phát TỪNG NGƯỜI MỘT, kèm `viewerId` của chính họ.
+   *
+   * Một bản `serializeMessage(message)` dùng chung cho cả room không có góc nhìn
+   * của ai, nên `reactedByMe` là `false` với tất cả — và client thay nguyên tin
+   * nhắn trong store bằng payload này. Hệ quả: chỉ cần ai đó sửa tin nhắn là biểu
+   * cảm của MỌI người mất trạng thái "mình đã thả", chip hết sáng, và cú bấm tiếp
+   * theo gỡ mất lượt thả trong khi giao diện đang vẽ như thể vừa thả thêm.
+   *
+   * Sửa tin nhắn là thao tác hiếm, nên N lượt emit ở đây không đáng kể — khác với
+   * `reaction:updated` vốn phải chịu tần suất cao và do đó chọn cách gửi `actorId`
+   * để client tự suy ra cờ của mình. Đây cũng đúng cách `conversation:updated`
+   * trong `deleteMessage` đã làm, vì cùng một lý do.
+   */
+  if (io) {
+    (conversation.participants ?? []).forEach((p) => {
+      const memberId = String(p.userId?._id ?? p.userId);
+
+      io.to(userRoom(memberId)).emit(SERVER_EVENTS.MESSAGE_UPDATED, {
+        message: serializeMessage(message, { viewerId: memberId }),
+      });
+    });
+  }
 
   return serialized;
 }
@@ -422,7 +444,11 @@ export async function toggleReaction({ messageId, actor, emoji }) {
   };
 }
 
-/** Gom `[{emoji, userId}]` thành `[{emoji, count}]`, giữ thứ tự thả đầu tiên. */
+/**
+ * Gom `[{emoji, userId}]` thành `[{emoji, count}]`, theo thứ tự cố định của
+ * `REACTION_EMOJIS` — cùng thứ tự mà `serializeMessage` dùng, nên bản broadcast và
+ * bản đọc từ HTTP không bao giờ xếp khác nhau.
+ */
 const countReactions = (reactions) => {
   const groups = new Map();
 
@@ -430,7 +456,9 @@ const countReactions = (reactions) => {
     groups.set(reaction.emoji, (groups.get(reaction.emoji) ?? 0) + 1);
   }
 
-  return [...groups].map(([emoji, count]) => ({ emoji, count }));
+  return [...groups]
+    .map(([emoji, count]) => ({ emoji, count }))
+    .sort((a, b) => reactionOrder(a.emoji) - reactionOrder(b.emoji));
 };
 
 const hasReacted = (reactions, emoji, userId) =>

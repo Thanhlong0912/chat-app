@@ -9,6 +9,8 @@
  * Đồng thời là lớp tương thích ngược: bản ghi cũ chỉ có `imgUrl` và không có
  * `kind` vẫn được trả về đúng hình dạng mới.
  */
+import { reactionOrder } from "../models/Message.js";
+
 const shapeUser = (user) => {
   if (!user) return null;
 
@@ -53,7 +55,8 @@ const shapeAttachments = (doc) => {
  * mình đã thả chưa". Trả mảng thô sẽ gửi kèm id của mọi người thả trong mọi trang
  * tin nhắn — vừa nặng, vừa là dữ liệu client không cần.
  *
- * Thứ tự theo lượt thả ĐẦU TIÊN, nên các chip không nhảy chỗ khi có người thả thêm.
+ * Thứ tự là thứ tự CỐ ĐỊNH của `REACTION_EMOJIS` (xem `reactionOrder`), nên các
+ * chip không nhảy chỗ dù có người thả thêm hay gỡ ra.
  */
 const shapeReactions = (doc, viewerId) => {
   const raw = doc.reactions ?? [];
@@ -76,7 +79,7 @@ const shapeReactions = (doc, viewerId) => {
     }
   }
 
-  return [...groups.values()];
+  return [...groups.values()].sort((a, b) => reactionOrder(a.emoji) - reactionOrder(b.emoji));
 };
 
 /**
