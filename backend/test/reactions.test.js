@@ -200,6 +200,90 @@ describe("serializer", () => {
 
     expect(serializeMessage(stored, { viewerId: ctx.alice._id }).reactions).toEqual([]);
   });
+
+  /*
+   * Thứ tự chip không được phụ thuộc vào mảng `reactions` thô.
+   *
+   * Bản trước gom theo "lượt thả đầu tiên", nên gỡ đúng lượt sớm nhất của một
+   * emoji sẽ đẩy cả nhóm đó xuống cuối — chip nhảy chỗ ngay dưới ngón tay người
+   * vừa bấm.
+   */
+  it("thứ tự nhóm cố định theo REACTION_EMOJIS, không theo lượt thả", async () => {
+    // Thả ngược thứ tự bảng chọn: 🙏 trước, 👍 sau.
+    await react(ctx.bob, ctx.message._id, "🙏");
+    await react(ctx.bob, ctx.message._id, "👍");
+
+    const stored = await Message.findById(ctx.message._id);
+
+    expect(
+      serializeMessage(stored, { viewerId: ctx.bob._id }).reactions.map((r) => r.emoji),
+    ).toEqual(["👍", "🙏"]);
+  });
+
+  it("gỡ một biểu cảm KHÔNG làm các chip còn lại đổi chỗ", async () => {
+    await react(ctx.alice, ctx.message._id, "👍");
+    await react(ctx.alice, ctx.message._id, "❤️");
+    await react(ctx.bob, ctx.message._id, "👍");
+
+    const before = await react(ctx.bob, ctx.message._id, "😂");
+    expect(before.body.reactions.map((r) => r.emoji)).toEqual(["👍", "❤️", "😂"]);
+
+    // Alice gỡ 👍 — chính là lượt thả sớm nhất của nhóm đó.
+    const after = await react(ctx.alice, ctx.message._id, "👍");
+
+    expect(after.body.reactions.map((r) => r.emoji)).toEqual(["👍", "❤️", "😂"]);
+  });
+});
+
+/*
+ * Sửa tin nhắn KHÔNG được đụng tới biểu cảm của người khác.
+ *
+ * `message:updated` phát một bản serialize dùng chung cho cả room, và client thay
+ * nguyên tin nhắn trong store bằng payload đó. Nếu bản đó không có góc nhìn của ai
+ * thì `reactedByMe` là false với tất cả — chip của mọi người tắt sáng chỉ vì ai đó
+ * sửa nội dung, và cú bấm kế tiếp gỡ mất lượt thả trong khi UI vẽ như đang thả thêm.
+ */
+describe("sửa tin nhắn không làm mất biểu cảm", () => {
+  it("mỗi người nhận message:updated với reactedByMe của CHÍNH mình", async () => {
+    const { setIo, resetIo } = await import("../src/socket/io.js");
+
+    const emitted = [];
+    const fakeIo = {
+      to(room) {
+        return {
+          emit: (event, payload) => emitted.push({ room, event, payload }),
+        };
+      },
+    };
+
+    setIo(fakeIo);
+
+    try {
+      await react(ctx.bob, ctx.message._id, "👍");
+
+      const { editMessage } = await import("../src/services/messageService.js");
+      await editMessage({
+        messageId: String(ctx.message._id),
+        actor: ctx.alice,
+        content: "xin chào (đã sửa)",
+      });
+
+      const updates = emitted.filter((e) => e.event === "message:updated");
+
+      const forBob = updates.find((e) => e.room === `u:${ctx.bob._id}`);
+      const forAlice = updates.find((e) => e.room === `u:${ctx.alice._id}`);
+
+      expect(forBob.payload.message.reactions).toEqual([
+        { emoji: "👍", count: 1, reactedByMe: true },
+      ]);
+
+      expect(forAlice.payload.message.reactions).toEqual([
+        { emoji: "👍", count: 1, reactedByMe: false },
+      ]);
+    } finally {
+      resetIo();
+    }
+  });
 });
 
 describe("đường đọc chính", () => {

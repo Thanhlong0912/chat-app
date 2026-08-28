@@ -57,6 +57,23 @@ const replyToSchema = new mongoose.Schema(
 export const REACTION_EMOJIS = Object.freeze(["👍", "❤️", "😂", "😮", "😢", "🙏"]);
 
 /**
+ * Thứ tự hiển thị các nhóm biểu cảm — CỐ ĐỊNH theo `REACTION_EMOJIS`.
+ *
+ * Trước đây thứ tự là "theo lượt thả đầu tiên", suy ra từ mảng `reactions` thô.
+ * Nhưng mảng đó thay đổi khi có người GỠ: gỡ lượt thả sớm nhất của một emoji sẽ
+ * đẩy cả nhóm xuống cuối, nên các chip nhảy chỗ ngay dưới ngón tay người vừa bấm.
+ *
+ * Thứ tự cố định không phụ thuộc vào dữ liệu nên không bao giờ nhảy, khớp luôn
+ * với thứ tự các nút trong bảng chọn, và khiến server với client trùng nhau mà
+ * không bên nào phải bắt chước quy ước của bên kia.
+ */
+export const reactionOrder = (emoji) => {
+  const index = REACTION_EMOJIS.indexOf(emoji);
+  // Emoji lạ (bản ghi cũ, trước khi có allowlist) dồn về cuối thay vì lên đầu.
+  return index === -1 ? REACTION_EMOJIS.length : index;
+};
+
+/**
  * Trần số biểu cảm trên MỘT tin nhắn.
  *
  * Document MongoDB có trần cứng 16MB, và mảng lồng trong document lớn dần sẽ làm

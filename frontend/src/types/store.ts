@@ -192,8 +192,18 @@ export interface SocketState {
   advanceRead: (conversationId: string, lastReadMessageId?: string) => void;
   /** Gửi qua socket; trả về false nếu socket không dùng được (client sẽ fallback HTTP). */
   sendMessage: (input: SendMessageInput) => Promise<Message | null>;
-  /** Thả biểu cảm qua socket; `false` nghĩa là chỗ gọi phải fallback sang HTTP. */
-  toggleReaction: (messageId: string, emoji: ReactionEmoji) => boolean;
+  /**
+   * Thả biểu cảm qua socket; `false` nghĩa là chỗ gọi phải fallback sang HTTP.
+   *
+   * `onFailure` được gọi khi server TỪ CHỐI (hết quyền, tin nhắn đã xoá, vượt trần
+   * biểu cảm) — không có nó thì bản vẽ lạc quan sẽ đứng lại vĩnh viễn ở một trạng
+   * thái mà server chưa bao giờ chấp nhận.
+   */
+  toggleReaction: (
+    messageId: string,
+    emoji: ReactionEmoji,
+    onFailure?: (error: Error) => void
+  ) => boolean;
   setAway: (away: boolean) => void;
 }
 

@@ -4,6 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import { chatService } from "@/services/chatService";
 import type { ChatState, MessageThread } from "@/types/store";
+import { REACTION_EMOJIS } from "@/types/chat";
 import type {
   Attachment,
   Conversation,
@@ -85,17 +86,30 @@ const insertMessage = (thread: MessageThread, message: Message): MessageThread =
 };
 
 /**
+ * Xếp các nhóm biểu cảm theo thứ tự CỐ ĐỊNH của `REACTION_EMOJIS`.
+ *
+ * Cùng quy ước với `reactionOrder` ở backend. Thứ tự cố định là thứ tự duy nhất
+ * không nhảy: xếp "theo lượt thả đầu tiên" nghe thì ổn định, nhưng gỡ đúng lượt
+ * thả sớm nhất của một emoji sẽ đẩy cả nhóm đó xuống cuối ngay dưới ngón tay
+ * người vừa bấm.
+ */
+const sortReactions = (groups: ReactionGroup[]): ReactionGroup[] =>
+  [...groups].sort(
+    (a, b) => REACTION_EMOJIS.indexOf(a.emoji) - REACTION_EMOJIS.indexOf(b.emoji),
+  );
+
+/**
  * Bật/tắt một emoji trong danh sách đã gom, dưới góc nhìn của CHÍNH người dùng.
  *
- * Giữ nguyên thứ tự các nhóm đang có, và bỏ hẳn nhóm về 0 thay vì để lại một chip
- * `count: 0`. Nhóm mới luôn được thêm vào CUỐI — cùng quy ước với server (thứ tự
- * theo lượt thả đầu tiên), nên các chip không nhảy chỗ khi bản thật về tới.
+ * Bỏ hẳn nhóm về 0 thay vì để lại một chip `count: 0`, và luôn trả về danh sách
+ * đã xếp theo thứ tự cố định — nên bản lạc quan nằm đúng chỗ mà bản thật của
+ * server sẽ nằm, và chip không nhấp nháy đổi chỗ khi broadcast về tới.
  */
 const applyToggle = (groups: ReactionGroup[], emoji: ReactionEmoji): ReactionGroup[] => {
   const existing = groups.find((g) => g.emoji === emoji);
 
   if (!existing) {
-    return [...groups, { emoji, count: 1, reactedByMe: true }];
+    return sortReactions([...groups, { emoji, count: 1, reactedByMe: true }]);
   }
 
   const delta = existing.reactedByMe ? -1 : 1;
@@ -491,20 +505,25 @@ export const useChatStore = create<ChatState>()(
 
         set((state) => writeReactions(state, conversationId, messageId, optimistic));
 
+        // Hoàn tác về đúng bản trước khi bấm — khác với gửi tin nhắn, ở đây không
+        // có gì để "thử lại", nên để UI nói dối là tệ hơn.
+        const rollback = (error: unknown) => {
+          set((s) => writeReactions(s, conversationId, messageId, before));
+          set({ error: describeError(error) });
+        };
+
         try {
           const socket = useSocketStore.getState();
 
-          // Socket không có ack đồng bộ ở đây; bản broadcast `reaction:updated` sẽ
-          // sửa lại nếu client đoán sai. HTTP là dự phòng khi socket đang đứt.
-          if (!socket.toggleReaction(messageId, emoji)) {
+          // Đường socket không chờ ack để CHỐT: bản broadcast `reaction:updated`
+          // làm việc đó. Ack chỉ dùng để bắt lúc server từ chối — nếu không, một
+          // lượt thả bị chặn sẽ nằm lại trên màn hình như thể đã thành công.
+          if (!socket.toggleReaction(messageId, emoji, rollback)) {
             const { reactions } = await chatService.toggleReaction(messageId, emoji);
             set((s) => writeReactions(s, conversationId, messageId, reactions));
           }
         } catch (error) {
-          // Hoàn tác về đúng bản trước khi bấm — khác với gửi tin nhắn, ở đây
-          // không có gì để "thử lại", nên để UI nói dối là tệ hơn.
-          set((s) => writeReactions(s, conversationId, messageId, before));
-          set({ error: describeError(error) });
+          rollback(error);
         }
       },
 
