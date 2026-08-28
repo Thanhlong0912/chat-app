@@ -33,9 +33,22 @@ let refreshPromise: Promise<string> | null = null;
 
 const refreshAccessToken = (): Promise<string> => {
   refreshPromise ??= api
-    .post<{ accessToken: string }>("/auth/refresh")
+    .post<{ accessToken: string | null }>("/auth/refresh")
     .then((res) => {
       const { accessToken } = res.data;
+
+      /*
+       * 200 kèm `accessToken: null` là cách backend nói "không còn phiên nào" mà
+       * không phải trả lỗi (xem authController.refreshToken). Với axios thì đó là
+       * một response thành công, nhưng với chỗ này thì không: không có token nào để
+       * thử lại. Ném ra để rơi vào nhánh catch của interceptor — nơi đã sẵn có
+       * clearState(). Bỏ qua thì request được gửi lại kèm `Bearer null`, ăn thêm
+       * một 401, và người dùng ở lại trong app với một phiên không tồn tại.
+       */
+      if (!accessToken) {
+        throw new Error("NO_SESSION");
+      }
+
       useAuthStore.getState().setAccessToken(accessToken);
       return accessToken;
     })

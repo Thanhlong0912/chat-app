@@ -84,6 +84,59 @@ describe("useAuthStore.refresh — khách chưa từng đăng nhập", () => {
   });
 });
 
+/*
+ * Backend nay trả 200 kèm `accessToken: null` thay vì 401 khi không có cookie nào
+ * cả — xem authController.refreshToken. Lý do là dòng "Failed to load resource: 401"
+ * mà trình duyệt tự ghi cho mọi khách mới: log tầng mạng, JS không tắt được, nên chỉ
+ * còn cách đừng trả lỗi.
+ *
+ * Nhánh 401 ở trên vẫn phải sống: frontend deploy được ngay, backend thì đang chờ
+ * RENDER_API_KEY, nên sẽ có một quãng bundle mới nói chuyện với backend cũ.
+ */
+describe("useAuthStore.refresh — backend nói 'không có phiên'", () => {
+  const noSession = () =>
+    server.use(http.post(`${API}/auth/refresh`, () => HttpResponse.json({ accessToken: null })));
+
+  it("không báo lỗi gì cả", async () => {
+    noSession();
+
+    await useAuthStore.getState().refresh();
+
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("dọn sạch state", async () => {
+    noSession();
+    useAuthStore.setState({ accessToken: "cũ" });
+
+    await useAuthStore.getState().refresh();
+
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(useAuthStore.getState().user).toBeNull();
+  });
+
+  /*
+   * Đây mới là điều đáng giữ. Không có phiên mà vẫn đi hỏi /users/me thì lại đúng
+   * một 401 nữa trong console — tức là đổi chỗ dòng đỏ chứ không xoá được nó.
+   */
+  it("không đi hỏi /users/me khi biết chắc là chưa đăng nhập", async () => {
+    let meCalls = 0;
+
+    noSession();
+    server.use(
+      http.get(`${API}/users/me`, () => {
+        meCalls += 1;
+        return HttpResponse.json({ code: "NO_ACCESS_TOKEN" }, { status: 401 });
+      }),
+    );
+
+    await useAuthStore.getState().refresh();
+
+    expect(meCalls).toBe(0);
+  });
+});
+
 describe("useAuthStore.refresh — phiên thật sự kết thúc", () => {
   it.each([
     ["REFRESH_TOKEN_EXPIRED", 403],

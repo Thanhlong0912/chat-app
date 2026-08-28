@@ -142,6 +142,30 @@ describe("interceptor refresh", () => {
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
+  /*
+   * Backend trả 200 kèm `accessToken: null` khi không còn cookie phiên nào (xem
+   * authController.refreshToken). 200 nên axios coi là thành công — nhưng ở đây nó
+   * là thất bại: không có token để thử lại. Không chặn thì interceptor gửi tiếp
+   * `Authorization: Bearer null`, nhận thêm một 401 nữa, và người dùng ở lại trong
+   * app với một phiên không tồn tại.
+   */
+  it("coi 'không có phiên' là refresh thất bại, không gửi 'Bearer null'", async () => {
+    const sentAuthHeaders: (string | null)[] = [];
+
+    server.use(
+      http.post(`${API}/auth/refresh`, () => HttpResponse.json({ accessToken: null })),
+      http.get(`${API}/one`, ({ request }) => {
+        sentAuthHeaders.push(request.headers.get("Authorization"));
+        return HttpResponse.json({}, { status: 401 });
+      }),
+    );
+
+    await expect(api.get("/one")).rejects.toBeTruthy();
+
+    expect(sentAuthHeaders).toEqual(["Bearer token-cu"]);
+    expect(useAuthStore.getState().accessToken).toBeNull();
+  });
+
   it("không refresh cho signin / signup / refresh", async () => {
     server.use(
       http.post(`${API}/auth/signin`, () =>
