@@ -146,12 +146,34 @@ describe("rotation", () => {
     expect(res.body.code).toBe("REFRESH_TOKEN_INVALID");
   });
 
-  it("thiếu cookie → 401", async () => {
+  /*
+   * Thiếu cookie KHÔNG phải lỗi.
+   *
+   * `ProtectedRoute` gọi /auth/refresh ngay khi mount cho mọi người vào "/" — gồm
+   * cả khách lần đầu, những người chưa từng có cookie nào. Trả 401 ở đây nghĩa là
+   * mọi khách mới đều thấy một dòng đỏ "Failed to load resource: 401" trong console
+   * production: log tầng mạng của trình duyệt, JS không tắt được. Cách duy nhất để
+   * nó biến mất là đừng trả lỗi cho một câu hỏi không có gì sai.
+   *
+   * "Có phiên nào không?" — "Không." Đó là 200 kèm accessToken null. Token hỏng,
+   * hết hạn hay bị dùng lại thì vẫn là lỗi thật và vẫn giữ nguyên mã cũ bên dưới.
+   */
+  it("thiếu cookie → 200 và accessToken null", async () => {
     const app = testApp();
 
-    const res = await supertest(app).post("/api/auth/refresh").expect(401);
+    const res = await supertest(app).post("/api/auth/refresh").expect(200);
 
-    expect(res.body.code).toBe("NO_REFRESH_TOKEN");
+    expect(res.body.accessToken).toBeNull();
+  });
+
+  // Không có phiên thì cũng không được cấp phiên: 200 ở trên là "không có gì", chứ
+  // không phải một đường vòng để lấy token.
+  it("thiếu cookie thì không phát cookie phiên mới", async () => {
+    const app = testApp();
+
+    const res = await supertest(app).post("/api/auth/refresh").expect(200);
+
+    expect(res.headers["set-cookie"]).toBeUndefined();
   });
 
   it("token đã hết hạn → 403 và bị xoá", async () => {

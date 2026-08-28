@@ -163,8 +163,26 @@ export const signOutEverywhere = async (req, res) => {
 export const refreshToken = async (req, res) => {
   const token = req.cookies?.refreshToken;
 
+  /*
+   * Không có cookie nào cả không phải lỗi — đó là một câu trả lời.
+   *
+   * Endpoint này bị gọi cho MỌI người vào "/", kể cả khách lần đầu chưa từng có
+   * phiên: `ProtectedRoute` không thể biết trước, vì refresh token nằm trong cookie
+   * httpOnly mà JS không đọc được. Hỏi "tôi có phiên nào không?" rồi nhận 401 nghĩa
+   * là mọi lượt ghé đầu tiên đều để lại một dòng đỏ trong console production —
+   * "Failed to load resource: 401" do chính trình duyệt ghi ở tầng mạng, không có
+   * cách nào tắt từ JS. Một console lúc nào cũng sẵn lỗi giả là một console không
+   * ai còn đọc khi có lỗi thật.
+   *
+   * Nên: không có phiên → 200 kèm `accessToken: null`. Client đọc null là "chưa
+   * đăng nhập" và đi thẳng tới màn hình đăng nhập.
+   *
+   * Chỉ đúng trường hợp "không có gì" mới được nhẹ tay như vậy. Token hỏng, hết hạn,
+   * hoặc bị dùng lại vẫn là lỗi thật — vẫn 403 kèm mã, và REFRESH_TOKEN_REUSED vẫn
+   * thu hồi cả họ session như cũ.
+   */
   if (!token) {
-    throw unauthorized("NO_REFRESH_TOKEN", "Token không tồn tại.");
+    return res.status(200).json({ accessToken: null });
   }
 
   const session = await findSessionByToken(token);

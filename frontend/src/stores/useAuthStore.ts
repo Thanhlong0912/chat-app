@@ -102,6 +102,21 @@ export const useAuthStore = create<AuthState>()(
           const { user, fetchMe, setAccessToken } = get();
           const accessToken = await authService.refresh();
 
+          /*
+           * `accessToken: null` kèm 200 là câu trả lời "không có phiên nào" của
+           * backend cho người chưa từng đăng nhập trên máy này — không phải lỗi, nên
+           * không toast, không console.
+           *
+           * Phải thoát ra ở đây chứ không đi tiếp: `fetchMe()` bên dưới sẽ gọi
+           * /users/me mà không có token, nhận 401, rồi interceptor lại thử refresh
+           * thêm một lượt nữa. Tức là hai dòng đỏ mới trong console để thay cho đúng
+           * cái dòng đỏ vừa bỏ được.
+           */
+          if (!accessToken) {
+            get().clearState();
+            return;
+          }
+
           setAccessToken(accessToken);
 
           if (!user) {
