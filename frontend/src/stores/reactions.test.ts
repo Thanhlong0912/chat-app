@@ -4,7 +4,7 @@ import { setupServer } from "msw/node";
 import { useChatStore } from "./useChatStore";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
-import type { Conversation, Message, ReactionGroup } from "@/types/chat";
+import type { Conversation, Message, ReactionEmoji, ReactionGroup } from "@/types/chat";
 
 const API = "http://localhost:5001/api";
 
@@ -185,6 +185,99 @@ describe("toggleReaction", () => {
 
     expect(reactionsOf()).toEqual(before);
     expect(useChatStore.getState().error).toBeTruthy();
+  });
+
+  /*
+   * Bản lạc quan phải nằm ĐÚNG CHỖ mà bản thật sẽ nằm.
+   *
+   * Trước đây nhóm mới luôn được nối vào cuối, nên thả 👍 lên một tin đã có 🙏 sẽ
+   * vẽ `[🙏, 👍]` rồi nhảy thành `[👍, 🙏]` khi server trả lời.
+   */
+  it("nhóm mới được chèn theo thứ tự cố định của REACTION_EMOJIS", async () => {
+    useChatStore.setState({
+      messages: {
+        "convo-1": {
+          ids: ["msg-1"],
+          byId: {
+            "msg-1": { ...message, reactions: [{ emoji: "🙏", count: 1, reactedByMe: false }] },
+          },
+          hasMore: false,
+          nextCursor: null,
+          status: "loaded",
+          error: null,
+        },
+      },
+    });
+
+    server.use(
+      http.put(`${API}/messages/:id/reactions`, () =>
+        HttpResponse.json({
+          reactions: [
+            { emoji: "👍", count: 1, reactedByMe: true },
+            { emoji: "🙏", count: 1, reactedByMe: false },
+          ],
+          active: true,
+        }),
+      ),
+    );
+
+    const promise = useChatStore.getState().toggleReaction("convo-1", "msg-1", "👍");
+
+    // Bản lạc quan: 👍 đứng TRƯỚC 🙏, đúng như server sẽ trả về.
+    expect(reactionsOf()?.map((r) => r.emoji)).toEqual(["👍", "🙏"]);
+
+    await promise;
+    expect(reactionsOf()?.map((r) => r.emoji)).toEqual(["👍", "🙏"]);
+  });
+
+  /*
+   * Đường socket cũng phải biết hoàn tác.
+   *
+   * Bản trước emit không kèm ack, nên khi server từ chối thì không có gì báo về:
+   * không broadcast, không lỗi. Chip lạc quan nằm lại vĩnh viễn ở một trạng thái
+   * server chưa bao giờ ghi nhận.
+   */
+  it("hoàn tác khi server từ chối qua socket, không chỉ qua HTTP", async () => {
+    const before: ReactionGroup[] = [{ emoji: "👍", count: 2, reactedByMe: false }];
+
+    useChatStore.setState({
+      messages: {
+        "convo-1": {
+          ids: ["msg-1"],
+          byId: { "msg-1": { ...message, reactions: before } },
+          hasMore: false,
+          nextCursor: null,
+          status: "loaded",
+          error: null,
+        },
+      },
+    });
+
+    // Socket "kết nối được" nhưng server trả về thất bại. Phải trả lại method thật
+    // sau đó: `beforeEach` chỉ reset `socket` và `status`, nên một method bị thay
+    // sẽ rò sang các test sau.
+    const realToggle = useSocketStore.getState().toggleReaction;
+
+    useSocketStore.setState({
+      status: "connected",
+      toggleReaction: (
+        _messageId: string,
+        _emoji: ReactionEmoji,
+        onFailure?: (error: Error) => void,
+      ) => {
+        onFailure?.(new Error("Không thả được biểu cảm (TOO_MANY_REACTIONS)"));
+        return true;
+      },
+    } as never);
+
+    try {
+      await useChatStore.getState().toggleReaction("convo-1", "msg-1", "👍");
+
+      expect(reactionsOf()).toEqual(before);
+      expect(useChatStore.getState().error).toBeTruthy();
+    } finally {
+      useSocketStore.setState({ toggleReaction: realToggle });
+    }
   });
 
   it("không gọi mạng cho tin nhắn lạc quan chưa có id thật", async () => {
